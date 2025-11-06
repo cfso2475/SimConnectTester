@@ -1,0 +1,13 @@
+我要写一个简单的winform应用，用visual studio的winform项目，语言是c#。这个应用用SimConnect接口访问微软模拟飞行。实现以下功能：
+1. 界面上上下排列三行内容，分别是 SimVar，SimEvent，InputEvent
+2. SimVar和SimEvent部分包含三个文本字段，Name，Type和Value
+3. SimVar部分有两个按钮，一个是获取，一个是修改
+4. SimEvent部分包含三个文本字段，Name，Type和Value，有一个触发按钮
+5. InputEvent部分也包含一个可搜索的下拉列表，和一个Value字段，有一个获取按钮，一个触发按钮
+
+6. 代码首先初始化SimConnect连接。
+7. 对于SimVar的获取按钮，如果Name、Type和Value不为空，那么则连接SimConnect获取SimVar并将结果显示在SimVar部分的下方
+8. 对于SimVar的修改按钮，如果Name、Type和Value不为空，那么则连接SimConnect触发SimVar的修改并将结果显示在SimVar部分的下方
+9. 对于SimEvent的触发按钮，如果Name和Value不为空，点击触发按钮触发这个事件。
+10. 对于InputEvent部分，首先，获得所有的InputEvent，放入可搜索的下拉列表。点击获取按钮可以获取InputEvent的值，并显示在该区段下方
+11. 当下拉列表选择并且Value有值，点击触发按钮触发InputEvent
