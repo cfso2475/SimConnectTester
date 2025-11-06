@@ -32,7 +32,8 @@ namespace SimConnectTester
         enum DATA_REQUESTS
         {
             RequestSimVar,
-            RequestInputEvents
+            RequestInputEvents,
+            REQUEST_EnumerateInputEvents
         }
         public enum SIMCONNECT_GROUP_PRIORITY : uint
         {
@@ -42,6 +43,15 @@ namespace SimConnectTester
             DEFAULT = 2000000000,
             LOWEST = 4000000000
         }
+        struct Struct1
+        {
+            // this is how you declare a fixed size string
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+            public String sValue;
+
+            // other definitions can be added to this struct
+            // ...
+        };
 
         enum FIXED_SIM_EVENTS
         {
@@ -66,7 +76,8 @@ namespace SimConnectTester
         // 存储InputEvents
         //private List<string> inputEventsList = new List<string>();
         //private Dictionary<uint, string> inputEventIdToName = new Dictionary<uint, string>();
-
+        private bool retrivedSimVar = false;
+        private Dictionary<string, FIXED_SIM_EVENTS> eventNameToEnumMap = new Dictionary<string, FIXED_SIM_EVENTS>();
         private static Dictionary<string, object> simConnectInputEvents = new Dictionary<string, object>();
         private bool isInputEventsLoaded = false;
         private bool isGettingInputEvent = false;
@@ -75,7 +86,6 @@ namespace SimConnectTester
             public double value_f64;
         };
 
-        private System.ComponentModel.IContainer components = null;
 
         private GroupBox simVarGroupBox;
         private GroupBox simEventGroupBox;
@@ -134,7 +144,7 @@ namespace SimConnectTester
         {
             try
             {
-                simConnect = new SimConnect("Flight Simulator Controller", this.Handle, 0x402, null, 0);
+                simConnect = new SimConnect("SimConnectTester", this.Handle, 0x402, null, 0);
 
                 // 注册SimConnect事件处理
                 simConnect.OnRecvOpen += new SimConnect.RecvOpenEventHandler(SimConnect_OnRecvOpen);
@@ -155,18 +165,10 @@ namespace SimConnectTester
                 UpdateStatus("SimConnect连接失败");
             }
         }
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing && (components != null))
-            {
-                components.Dispose();
-            }
-            base.Dispose(disposing);
-        }
 
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
+            //this.components = new System.ComponentModel.Container();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(600, 700);
             this.Text = "Flight Simulator Controller";
@@ -329,7 +331,7 @@ namespace SimConnectTester
 
             inputEventComboBox = new ComboBox();
             inputEventComboBox.Location = new Point(100, 32);
-            inputEventComboBox.Size = new Size(300, 21);
+            inputEventComboBox.Size = new Size(200, 21);
             inputEventComboBox.DropDownStyle = ComboBoxStyle.DropDown;
             inputEventComboBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
             inputEventComboBox.AutoCompleteSource = AutoCompleteSource.ListItems;
@@ -350,14 +352,14 @@ namespace SimConnectTester
 
             // 按钮
             inputEventGetButton = new Button();
-            inputEventGetButton.Text = "获取事件列表";
-            inputEventGetButton.Location = new Point(420, 30);
-            inputEventGetButton.Size = new Size(120, 30);
+            inputEventGetButton.Text = "获取值";
+            inputEventGetButton.Location = new Point(320, 30);
+            inputEventGetButton.Size = new Size(80, 30);
             inputEventGetButton.Click += inputEventGetButton_Click;
             inputEventGroupBox.Controls.Add(inputEventGetButton);
 
             inputEventTriggerButton = new Button();
-            inputEventTriggerButton.Text = "触发";
+            inputEventTriggerButton.Text = "设置值";
             inputEventTriggerButton.Location = new Point(320, 65);
             inputEventTriggerButton.Size = new Size(80, 30);
             inputEventTriggerButton.Click += inputEventTriggerButton_Click;
@@ -404,9 +406,10 @@ namespace SimConnectTester
             inputEventTriggerButton.TabIndex = 12;
         }
         #region SimConnect事件处理
-        private void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
+        private async void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
         {
             UpdateStatus("已连接到Microsoft Flight Simulator");
+            await EnumerateInputEvents();
         }
 
         private void SimConnect_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
@@ -422,12 +425,15 @@ namespace SimConnectTester
 
         private void SimConnect_OnRecvSimobjectData(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data)
         {
+            _logger.LogDebug("In SimConnect_OnRecvSimobjectData ");
             switch ((DATA_REQUESTS)data.dwRequestID)
             {
                 case DATA_REQUESTS.RequestSimVar:
                     // 处理SimVar数据返回
                     double simVarValue = (double)data.dwData[0];
+                    retrivedSimVar = true;
                     UpdateSimVarResult($"获取成功: {simVarValue}");
+                    _logger.LogDebug($"获取成功: {simVarValue}");
                     break;
             }
         }
@@ -467,7 +473,7 @@ namespace SimConnectTester
         #endregion
 
         #region SimVar功能
-        private void simVarGetButton_Click(object sender, EventArgs e)
+        private async void simVarGetButton_Click(object sender, EventArgs e)
         {
             if (!simConnectConnected)
             {
@@ -492,24 +498,56 @@ namespace SimConnectTester
                 // 定义SimVar
                 if (type != "String")
                 {
-                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_DOUBLE, name, null, SIMCONNECT_DATATYPE.STRING256, 0, SimConnect.SIMCONNECT_UNUSED);
+                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_DOUBLE, name, type, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
                     simConnect.RegisterDataDefineStruct<double>(DEFINITIONS.SIMVAR_DOUBLE);
                     // 请求SimVar数据
                     simConnect.RequestDataOnSimObject(DATA_REQUESTS.RequestSimVar, DEFINITIONS.SIMVAR_DOUBLE, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
                 }
                 else
                 {
-                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_STRING, name, type, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
-                    simConnect.RegisterDataDefineStruct<double>(DEFINITIONS.SIMVAR_STRING);
+                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_STRING, name, null, SIMCONNECT_DATATYPE.STRING256, 0, SimConnect.SIMCONNECT_UNUSED);
+                    simConnect.RegisterDataDefineStruct<Struct1>(DEFINITIONS.SIMVAR_STRING);
                     // 请求SimVar数据
                     simConnect.RequestDataOnSimObject(DATA_REQUESTS.RequestSimVar, DEFINITIONS.SIMVAR_STRING, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
                 }
+                await Task.Delay(300);
+                simConnect.ReceiveMessage();
+                //循环尝试，直至Connect_Wait_Time定义的尝试次数。直到取得数据或者超时 
+                int loop = 0;
+                bool running = true;
+                _logger.LogDebug($"GetSimVarValueAsync:等待获取SimVar数据，第{loop}次...");
+                while (running && !retrivedSimVar)
+                {
+                    loop++;
+                    _logger.LogDebug($"GetSimVarValueAsync:等待获取SimVar数据，第{loop}次...");
 
-                UpdateSimVarResult("正在获取SimVar...");
+                    if (simConnect != null)
+                    {
+                        // 获取一次数据
+                        simConnect.ReceiveMessage();
+
+                    }
+
+                    //debug
+                    //if (loop > 60000)
+                    if (loop > 10)
+                    {
+                        running = false;
+                        _logger.LogWarning("获取SimVar值超时");
+                        return;
+                    }
+
+                    Thread.Sleep(500); // 短暂休眠以避免CPU过度使用
+                    //Debug
+                    //Thread.Sleep(1000); // 短暂休眠以避免CPU过度使用
+                    UpdateSimVarResult("正在获取SimVar...");
+                }
+                
             }
             catch (Exception ex)
             {
                 UpdateSimVarResult($"获取失败: {ex.Message}");
+                _logger.LogDebug($"获取失败: {ex.Message}");
             }
         }
 
@@ -540,12 +578,13 @@ namespace SimConnectTester
                 {
                     if (double.TryParse(value, out double doubleValue))
                     {
-                        simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_DOUBLE, name, null, SIMCONNECT_DATATYPE.STRING256, 0, SimConnect.SIMCONNECT_UNUSED);
+                        _logger.LogDebug($"doubleValue:{doubleValue}");
+                        simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_DOUBLE, name, type, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
                         simConnect.RegisterDataDefineStruct<double>(DEFINITIONS.SIMVAR_DOUBLE);
                         // 请求SimVar数据
-                        simConnect.RequestDataOnSimObject(DATA_REQUESTS.RequestSimVar, DEFINITIONS.SIMVAR_DOUBLE, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
+                        //simConnect.RequestDataOnSimObject(DATA_REQUESTS.RequestSimVar, DEFINITIONS.SIMVAR_DOUBLE, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
                         // 设置SimVar值
-                        simConnect.SetDataOnSimObject(DEFINITIONS.SIMVAR_DOUBLE, SimConnect.SIMCONNECT_OBJECT_ID_USER, 0, new double[] { doubleValue });
+                        simConnect.SetDataOnSimObject(DEFINITIONS.SIMVAR_DOUBLE, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_DATA_SET_FLAG.DEFAULT,  doubleValue );
                     }
                     else
                     {
@@ -554,13 +593,13 @@ namespace SimConnectTester
                 }
                 else
                 {
-                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_STRING, name, type, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
-                    simConnect.RegisterDataDefineStruct<double>(DEFINITIONS.SIMVAR_STRING);
+                    simConnect.AddToDataDefinition(DEFINITIONS.SIMVAR_STRING, name, null, SIMCONNECT_DATATYPE.STRING256,0, SimConnect.SIMCONNECT_UNUSED);
+                    simConnect.RegisterDataDefineStruct<Struct1>(DEFINITIONS.SIMVAR_STRING);
                     // 请求SimVar数据
                     simConnect.RequestDataOnSimObject(DATA_REQUESTS.RequestSimVar, DEFINITIONS.SIMVAR_STRING, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, 0, 0, 0, 0);
-                    simConnect.SetDataOnSimObject(DEFINITIONS.SIMVAR_STRING, SimConnect.SIMCONNECT_OBJECT_ID_USER, 0, value );
+                    simConnect.SetDataOnSimObject(DEFINITIONS.SIMVAR_STRING, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_DATA_SET_FLAG.DEFAULT, value );
                 }
-                    
+                simConnect.ReceiveMessage();
                 UpdateSimVarResult($"设置成功: {value}");
                 
 
@@ -592,12 +631,56 @@ namespace SimConnectTester
 
             try
             {
+                FIXED_SIM_EVENTS currentEvent;
+
+                // 检查是否已经处理过该事件名
+                if (eventNameToEnumMap.ContainsKey(name))
+                {
+                    // 如果已存在，使用之前映射的枚举值
+                    currentEvent = eventNameToEnumMap[name];
+                }
+                else
+                {
+                    // 如果不存在，创建新的映射
+                    if (event_index > 9)
+                    {
+                        event_index = 0;
+                        simConnect.ClearNotificationGroup(GROUP_ID.GROUP_1);
+                        // 清空映射字典，因为通知组已清除
+                        eventNameToEnumMap.Clear();
+                    }
+
+                    currentEvent = (FIXED_SIM_EVENTS)event_index;
+                    simConnect.MapClientEventToSimEvent(currentEvent, name);
+                    simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, currentEvent, false);
+
+                    // 保存映射关系
+                    eventNameToEnumMap[name] = currentEvent;
+                    event_index++;
+                }
+
+                // 触发事件
+                if (!string.IsNullOrEmpty(value) && double.TryParse(value, out double eventValue))
+                {
+                    simConnect.TransmitClientEvent(SimConnect.SIMCONNECT_OBJECT_ID_USER, currentEvent, (uint)eventValue, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+                }
+                else
+                {
+                    simConnect.TransmitClientEvent(SimConnect.SIMCONNECT_OBJECT_ID_USER, currentEvent, 0, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+                }
+
+                simEventResultLabel.Text = $"事件触发成功: {name}";
+
+                /*
                 if (event_index > 9)
+                {
+                    event_index = 0;
                     simConnect.ClearNotificationGroup(GROUP_ID.GROUP_1);
+                }
 
                 simConnect.MapClientEventToSimEvent((FIXED_SIM_EVENTS)event_index, name);
                 simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, (FIXED_SIM_EVENTS)event_index, false);
-                event_index++;
+
 
 
                 if (!string.IsNullOrEmpty(value) && double.TryParse(value, out double eventValue))
@@ -608,8 +691,9 @@ namespace SimConnectTester
                 {
                     simConnect.TransmitClientEvent(SimConnect.SIMCONNECT_OBJECT_ID_USER, (FIXED_SIM_EVENTS)event_index, 0, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
                 }
-
+                event_index++;
                 simEventResultLabel.Text = $"事件触发成功: {name}";
+                */
             }
             catch (Exception ex)
             {
@@ -669,6 +753,35 @@ namespace SimConnectTester
                     break;
             }
             isGettingInputEvent = false;
+        }
+        public async Task<bool> EnumerateInputEvents()
+        {
+            if (!simConnectConnected)
+            {
+                MessageBox.Show("SimConnect未连接", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false ;
+            }
+            
+            try
+            {
+                _logger.LogDebug("Starting input event enumeration...");
+                var loop = 0;
+
+                while (!isInputEventsLoaded)
+                {
+                    loop++;
+                    simConnect.EnumerateInputEvents(DATA_REQUESTS.REQUEST_EnumerateInputEvents);
+                    simConnect.ReceiveMessage();
+                    await Task.Delay(5000);
+                    _logger.LogDebug($"循环第{loop}次以获取InputEvents");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug($"Enumeration failed: {ex.Message}");
+            }
+            
+            return isInputEventsLoaded;
         }
         private void inputEventGetButton_Click(object sender, EventArgs e)
         {
@@ -756,18 +869,24 @@ namespace SimConnectTester
         private void inputEventComboBox_KeyUp(object sender, KeyEventArgs e)
         {
             // 实现搜索功能
-            if (inputEventComboBox.Items.Count > 0)
+            if (simConnectInputEvents.Keys.Count > 0)
             {
-                string searchText = inputEventComboBox.Text.ToLower();
-                var filteredItems = inputEventsList.Where(item => item.ToLower().Contains(searchText)).ToArray();
+                string searchText = inputEventComboBox.Text;
 
+                // 使用原始的事件名称列表进行过滤
+                var filteredItems = simConnectInputEvents.Keys
+                    .Where(item => item.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToArray();
+
+                // 更新下拉列表的项，但不改变当前输入的文本
                 inputEventComboBox.Items.Clear();
                 inputEventComboBox.Items.AddRange(filteredItems);
 
-                if (filteredItems.Length > 0)
-                {
-                    inputEventComboBox.DroppedDown = true;
-                }
+                // 显示下拉列表（如果有匹配项）
+                inputEventComboBox.DroppedDown = filteredItems.Length > 0 && !string.IsNullOrEmpty(searchText);
+
+                // 确保光标保持在当前位置
+                inputEventComboBox.SelectionStart = searchText.Length;
             }
         }
         #endregion
