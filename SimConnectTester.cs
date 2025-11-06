@@ -716,9 +716,12 @@ namespace SimConnectTester
                     _logger.LogDebug($"  InputEvent eType: {msg.eType}");
                     _logger.LogDebug($"  InputEvent Name: {msg.Name}");
 
-                    simConnectInputEvents.Add(msg.Name, msg.Hash);
-                    inputEventComboBox.Items.Add(msg.Name);
-                    simConnect.EnumerateInputEventParams(msg.Hash);
+                    if(!simConnectInputEvents.Keys.Contains(msg.Name))
+                    { 
+                        simConnectInputEvents.Add(msg.Name, msg.Hash);
+                        inputEventComboBox.Items.Add(msg.Name);
+                        simConnect.EnumerateInputEventParams(msg.Hash);
+                    }
                 }
                 if (simConnectInputEvents.Count > 1)
                 {
