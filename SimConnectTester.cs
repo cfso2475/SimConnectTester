@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 //using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Button = System.Windows.Forms.Button;
@@ -1051,10 +1052,14 @@ namespace SimConnectTester
                 simConnect.SetClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, DEFINITIONS.LVAR_REQUEST_DEFINITION,
                     SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
+                simConnect.ReceiveMessage();
+                //await Task.Delay(1000);
+
                 // 触发读取事件
                 simConnect.TransmitClientEvent(0, LVAR_EVENTS.EVENT_LVAR_READ, 0,
                     SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
 
+                //await Task.Delay(1000);
                 // 订阅响应ClientData的变化
                 simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
                     DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
