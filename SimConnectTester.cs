@@ -480,8 +480,8 @@ namespace SimConnectTester
         private async void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
         {
             UpdateStatus("已连接到Microsoft Flight Simulator");
+            
             await EnumerateInputEvents();
-
             // 设置请求ClientData区域
             // 定义请求数据结构
             simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", DEFINITIONS.LVAR_REQUEST_DEFINITION);
