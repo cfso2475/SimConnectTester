@@ -1046,29 +1046,6 @@ namespace SimConnectTester
 
             try
             {
-                //move to open and clear in close
-                /*
-                // 设置请求ClientData区域
-                simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", DEFINITIONS.LVAR_REQUEST_DEFINITION);
-                simConnect.CreateClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-
-                // 定义请求数据结构
-                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256,0,0);
-                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
-
-                // 定义响应数据结构
-                simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", DEFINITIONS.LVAR_RESPONSE_DEFINITION);
-                simConnect.CreateClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8,0,0);
-                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
-
-                // 映射事件
-                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
-                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
-
-                // 订阅响应事件
-                simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
-                */
                 // 发送LVAR名称到ClientData
                 LVARRequestData requestData = new LVARRequestData { lvarName = lvarName };
                 simConnect.SetClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, DEFINITIONS.LVAR_REQUEST_DEFINITION,
