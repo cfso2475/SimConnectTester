@@ -26,15 +26,36 @@ namespace SimConnectTester
             SimVarDefinition,
             SimEventDefinition,
             SIMVAR_DOUBLE,
-            SIMVAR_STRING
+            SIMVAR_STRING,
+            LVAR_REQUEST_DEFINITION,  // 请求
+            LVAR_RESPONSE_DEFINITION  // 结果
         }
 
         enum DATA_REQUESTS
         {
             RequestSimVar,
             RequestInputEvents,
-            REQUEST_EnumerateInputEvents
+            REQUEST_EnumerateInputEvents,
+            REQUEST_LVAR_VALUE  // LVAR Request
         }
+
+        enum LVAR_EVENTS
+        {
+            EVENT_LVAR_READ,
+            EVENT_LVAR_GOT
+        }
+
+        struct LVARRequestData
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+            public string lvarName;
+        }
+
+        struct LVARResponseData
+        {
+            public double lvarValue;
+        }
+
         public enum SIMCONNECT_GROUP_PRIORITY : uint
         {
             HIGHEST = 1,
@@ -123,6 +144,14 @@ namespace SimConnectTester
         private Button inputEventTriggerButton;
         private Label inputEventResultLabel;
 
+        //LVAR 部分
+        private GroupBox lvarGroupBox;
+        private Label lvarNameLabel;
+        private TextBox lvarNameTextBox;
+        private Button lvarGetButton;
+        private Label lvarResultLabel;
+
+
         // 状态标签
         private Label statusLabel;
         public SimConnectTester()
@@ -154,6 +183,8 @@ namespace SimConnectTester
                 simConnect.OnRecvEnumerateInputEvents += OnRecvEventEnum;
                 simConnect.OnRecvEnumerateInputEventParams += OnRecvEventEnumParams;
                 simConnect.OnRecvGetInputEvent += OnRecvGetInputEvent;
+                simConnect.OnRecvEvent += new SimConnect.RecvEventEventHandler(SimConnect_OnRecvEvent);
+                simConnect.OnRecvClientData += new SimConnect.RecvClientDataEventHandler(SimConnect_OnRecvClientData);
 
                 simConnectConnected = true;
                 UpdateStatus("SimConnect连接成功");
@@ -170,13 +201,14 @@ namespace SimConnectTester
         {
             //this.components = new System.ComponentModel.Container();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 700);
+            this.ClientSize = new System.Drawing.Size(600, 900);
             this.Text = "Flight Simulator Controller";
             this.StartPosition = FormStartPosition.CenterScreen;
 
             InitializeSimVarSection();
             InitializeSimEventSection();
             InitializeInputEventSection();
+            InitializeLVARSection();
             InitializeStatusLabel();
 
             // 设置Tab顺序
@@ -374,7 +406,43 @@ namespace SimConnectTester
             inputEventResultLabel.BackColor = Color.LightGray;
             inputEventGroupBox.Controls.Add(inputEventResultLabel);
         }
+        private void InitializeLVARSection()
+        {
+            lvarGroupBox = new GroupBox();
+            lvarGroupBox.Text = "LVAR";
+            lvarGroupBox.Location = new Point(20, 620);
+            lvarGroupBox.Size = new Size(560, 150);
+            this.Controls.Add(lvarGroupBox);
 
+            // LVAR Name
+            lvarNameLabel = new Label();
+            lvarNameLabel.Text = "LVAR Name:";
+            lvarNameLabel.Location = new Point(20, 30);
+            lvarNameLabel.Size = new Size(80, 20);
+            lvarGroupBox.Controls.Add(lvarNameLabel);
+
+            lvarNameTextBox = new TextBox();
+            lvarNameTextBox.Location = new Point(100, 27);
+            lvarNameTextBox.Size = new Size(300, 20);
+            lvarGroupBox.Controls.Add(lvarNameTextBox);
+
+            // 获取按钮
+            lvarGetButton = new Button();
+            lvarGetButton.Text = "获取LVAR值";
+            lvarGetButton.Location = new Point(420, 25);
+            lvarGetButton.Size = new Size(100, 30);
+            lvarGetButton.Click += lvarGetButton_Click;
+            lvarGroupBox.Controls.Add(lvarGetButton);
+
+            // 结果显示
+            lvarResultLabel = new Label();
+            lvarResultLabel.Text = "LVAR值将显示在这里...";
+            lvarResultLabel.Location = new Point(20, 70);
+            lvarResultLabel.Size = new Size(520, 60);
+            lvarResultLabel.BorderStyle = BorderStyle.FixedSingle;
+            lvarResultLabel.BackColor = Color.LightGray;
+            lvarGroupBox.Controls.Add(lvarResultLabel);
+        }
         private void InitializeStatusLabel()
         {
             statusLabel = new Label();
@@ -404,17 +472,43 @@ namespace SimConnectTester
             inputEventValueTextBox.TabIndex = 10;
             inputEventGetButton.TabIndex = 11;
             inputEventTriggerButton.TabIndex = 12;
+
+            lvarNameTextBox.TabIndex = 13;  // 新增
+            lvarGetButton.TabIndex = 14;    // 新增
         }
         #region SimConnect事件处理
         private async void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
         {
             UpdateStatus("已连接到Microsoft Flight Simulator");
             await EnumerateInputEvents();
+
+            // 设置请求ClientData区域
+            // 定义请求数据结构
+            simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", DEFINITIONS.LVAR_REQUEST_DEFINITION);
+            simConnect.CreateClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256, 0, 0);
+            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
+
+            // 定义响应数据结构
+            simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+            simConnect.CreateClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
+            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+
+            // 映射事件
+            simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
+            simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
+
+            // 订阅响应事件
+            simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
         }
 
         private void SimConnect_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
         {
             UpdateStatus("Flight Simulator已断开连接");
+            simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION);
+            simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+            simConnect.ClearNotificationGroup(GROUP_ID.GROUP_1);
             simConnectConnected = false;
         }
 
@@ -435,9 +529,38 @@ namespace SimConnectTester
                     UpdateSimVarResult($"获取成功: {simVarValue}");
                     _logger.LogDebug($"获取成功: {simVarValue}");
                     break;
+                case DATA_REQUESTS.REQUEST_LVAR_VALUE:
+                    // 处理LVAR数据返回
+                    LVARResponseData responseData = (LVARResponseData)data.dwData[0];
+                    UpdateLVARResult($"LVAR值: {responseData.lvarValue}");
+                    break;
             }
         }
 
+        // 新增事件处理
+        private void SimConnect_OnRecvEvent(SimConnect sender, SIMCONNECT_RECV_EVENT data)
+        {
+            switch ((LVAR_EVENTS)data.uEventID)
+            {
+                case LVAR_EVENTS.EVENT_LVAR_GOT:
+                    // 请求响应数据
+                    simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
+                        DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT,0,0,0);
+                    break;
+            }
+        }
+
+        private void SimConnect_OnRecvClientData(SimConnect sender, SIMCONNECT_RECV_CLIENT_DATA data)
+        {
+            switch ((DATA_REQUESTS)data.dwRequestID)
+            {
+                case DATA_REQUESTS.REQUEST_LVAR_VALUE:
+                    // 处理LVAR数据返回
+                    LVARResponseData responseData = (LVARResponseData)data.dwData[0];
+                    UpdateLVARResult($"LVAR值: {responseData.lvarValue}");
+                    break;
+            }
+        }
         #endregion
 
         #region UI更新方法
@@ -469,6 +592,15 @@ namespace SimConnectTester
                 return;
             }
             inputEventResultLabel.Text = message;
+        }
+        private void UpdateLVARResult(string message)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<string>(UpdateLVARResult), message);
+                return;
+            }
+            lvarResultLabel.Text = message;
         }
         #endregion
 
@@ -700,6 +832,7 @@ namespace SimConnectTester
                 simEventResultLabel.Text = $"事件触发失败: {ex.Message}";
             }
         }
+     
         #endregion
 
         #region InputEvent功能
@@ -894,6 +1027,70 @@ namespace SimConnectTester
         }
         #endregion
 
+
+        #region LVAR功能
+        private void lvarGetButton_Click(object sender, EventArgs e)
+        {
+            if (!simConnectConnected)
+            {
+                MessageBox.Show("SimConnect未连接", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string lvarName = lvarNameTextBox.Text.Trim();
+            if (string.IsNullOrEmpty(lvarName))
+            {
+                MessageBox.Show("LVAR名称不能为空", "警告", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                //move to open and clear in close
+                /*
+                // 设置请求ClientData区域
+                simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", DEFINITIONS.LVAR_REQUEST_DEFINITION);
+                simConnect.CreateClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+
+                // 定义请求数据结构
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256,0,0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
+
+                // 定义响应数据结构
+                simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+                simConnect.CreateClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8,0,0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+
+                // 映射事件
+                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
+                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
+
+                // 订阅响应事件
+                simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
+                */
+                // 发送LVAR名称到ClientData
+                LVARRequestData requestData = new LVARRequestData { lvarName = lvarName };
+                simConnect.SetClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+
+                // 触发读取事件
+                simConnect.TransmitClientEvent(0, LVAR_EVENTS.EVENT_LVAR_READ, 0,
+                    SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+
+                // 订阅响应ClientData的变化
+                simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
+                    DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.CHANGED, 0, 0, 0);
+
+                lvarResultLabel.Text = "正在获取LVAR值...";
+            }
+            catch (Exception ex)
+            {
+                lvarResultLabel.Text = $"获取失败: {ex.Message}";
+            }
+        }
+        #endregion
         protected override void WndProc(ref Message m)
         {
             // 处理SimConnect消息
