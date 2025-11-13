@@ -1,15 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.FlightSimulator.SimConnect;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 //using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using Button = System.Windows.Forms.Button;
 
@@ -70,7 +62,7 @@ namespace SimConnectTester
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
         struct LVARListResponseData
         {
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8192)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32768)]
             public string lvarList;
         }
 
@@ -632,6 +624,7 @@ namespace SimConnectTester
 
         private void SimConnect_OnRecvClientData(SimConnect sender, SIMCONNECT_RECV_CLIENT_DATA data)
         {
+            _logger.LogDebug($"In SimConnect_OnRecvClientData->data.dwRequestID:{data.dwRequestID}");
             switch ((DATA_REQUESTS)data.dwRequestID)
             {
                 case DATA_REQUESTS.RESPONSE_LVAR_VALUE:
@@ -642,6 +635,7 @@ namespace SimConnectTester
                 case DATA_REQUESTS.RESPONSE_LVAR_LIST:
                     // 处理LVAR列表响应
                     LVARListResponseData listResponse = (LVARListResponseData)data.dwData[0];
+                    _logger.LogDebug($"Received List:{listResponse.lvarList}");
                     UpdateLVARList(listResponse.lvarList);
                     break;
             }
