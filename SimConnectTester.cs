@@ -175,6 +175,10 @@ namespace SimConnectTester
 
         // 状态标签
         private Label statusLabel;
+
+        private Button connectButton;
+        private Button disconnectButton;
+
         public SimConnectTester()
         {
             using var loggerFactory = LoggerFactory.Create(builder =>
@@ -187,15 +191,16 @@ namespace SimConnectTester
             });
             _logger = loggerFactory.CreateLogger<SimConnectTester>();
             InitializeComponent();
-            InitializeSimConnect();
+            //InitializeSimConnect();
         }
 
         private void InitializeSimConnect()
         {
+            _logger.LogDebug($"In InitializeSimConnect");
             try
             {
                 simConnect = new SimConnect("SimConnectTester", this.Handle, 0x402, null, 0);
-
+                _logger.LogDebug($"trigger SimConnect");
                 // 注册SimConnect事件处理
                 simConnect.OnRecvOpen += new SimConnect.RecvOpenEventHandler(SimConnect_OnRecvOpen);
                 simConnect.OnRecvQuit += new SimConnect.RecvQuitEventHandler(SimConnect_OnRecvQuit);
@@ -206,9 +211,8 @@ namespace SimConnectTester
                 simConnect.OnRecvGetInputEvent += OnRecvGetInputEvent;
                 simConnect.OnRecvEvent += new SimConnect.RecvEventEventHandler(SimConnect_OnRecvEvent);
                 simConnect.OnRecvClientData += new SimConnect.RecvClientDataEventHandler(SimConnect_OnRecvClientData);
+                _logger.LogDebug($"registered events");
 
-                simConnectConnected = true;
-                UpdateStatus("SimConnect连接成功");
             }
             catch (Exception ex)
             {
@@ -222,7 +226,7 @@ namespace SimConnectTester
         {
             //this.components = new System.ComponentModel.Container();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 900);
+            this.ClientSize = new System.Drawing.Size(600, 950);
             this.Text = "Flight Simulator Controller";
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -231,6 +235,7 @@ namespace SimConnectTester
             InitializeInputEventSection();
             InitializeLVARSection();
             InitializeStatusLabel();
+            InitializeConnectionButtons();
 
             // 设置Tab顺序
             SetTabOrder();
@@ -498,7 +503,23 @@ namespace SimConnectTester
             statusLabel.BackColor = SystemColors.Info;
             this.Controls.Add(statusLabel);
         }
+        private void InitializeConnectionButtons()
+        {
+            connectButton = new Button();
+            connectButton.Text = "连接";
+            connectButton.Location = new Point(20, 780);
+            connectButton.Size = new Size(100, 30);
+            connectButton.Click += ConnectButton_Click;
+            this.Controls.Add(connectButton);
 
+            disconnectButton = new Button();
+            disconnectButton.Text = "断开";
+            disconnectButton.Location = new Point(140, 780);
+            disconnectButton.Size = new Size(100, 30);
+            disconnectButton.Click += DisconnectButton_Click;
+            disconnectButton.Enabled = false;
+            this.Controls.Add(disconnectButton);
+        }
         private void SetTabOrder()
         {
             // 设置Tab键顺序
@@ -521,12 +542,56 @@ namespace SimConnectTester
             lvarNameTextBox.TabIndex = 13;  // 新增
             lvarGetButton.TabIndex = 14;    // 新增
         }
+
+        // 添加连接按钮点击事件处理
+        private void ConnectButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                InitializeSimConnect();
+                connectButton.Enabled = false;
+                UpdateStatus("正在连接...");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"连接失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateStatus("连接失败");
+            }
+        }
+
+        // 添加断开按钮点击事件处理
+        private void DisconnectButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (simConnect != null)
+                {
+                    simConnect.Dispose();
+                    simConnect = null;
+                }
+                simConnectConnected = false;
+                //connectButton.Enabled = true;
+                disconnectButton.Enabled = false;
+                UpdateStatus("已断开连接");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"断开连接失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+
         #region SimConnect事件处理
         private async void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
         {
+            _logger.LogDebug("SimConnect连接成功");
             UpdateStatus("已连接到Microsoft Flight Simulator");
+            simConnectConnected = true;
             
+
             await EnumerateInputEvents();
+            _logger.LogDebug("Triggered EnumerateInputEvents");
+
             // 设置请求ClientData区域
             // 定义请求数据结构
             simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", ClientDataID.LVAR_REQUEST);
@@ -551,7 +616,8 @@ namespace SimConnectTester
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
 
-
+            _logger.LogDebug("Created Client Data Area");
+            disconnectButton.Enabled = true;
             // 映射事件
             /*
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
@@ -566,44 +632,51 @@ namespace SimConnectTester
 
         private void RequestLVARList()
         {
+            if(simConnect!=null& simConnectConnected)
+            { 
             if (isGettingLVARList) return;
-            try
-            {
-                isGettingLVARList = true;
-                allLVARs.Clear();
-                currentBatch = 0;
-                totalBatches = 0;
+                try
+                {
+                    isGettingLVARList = true;
+                    allLVARs.Clear();
+                    currentBatch = 0;
+                    totalBatches = 0;
 
-                // 首先请求LVAR总数
-                LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARListCount" };
-                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
-                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+                    // 首先请求LVAR总数
+                    LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARListCount" };
+                    simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                        SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
-                // 订阅总数响应
-                simConnect.RequestClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST_COUNT,
-                    DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
-                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+                    // 订阅总数响应
+                    simConnect.RequestClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST_COUNT,
+                        DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
+                        SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
-                UpdateLVARResult("正在获取LVAR总数...");
+                    UpdateLVARResult("正在获取LVAR总数...");
 
-                /*
-                // 发送获取LVAR列表的请求
-                LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARList" };
-                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
-                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+                    /*
+                    // 发送获取LVAR列表的请求
+                    LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARList" };
+                    simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                        SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
-                // 订阅LVAR列表响应
-                simConnect.RequestClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST,
-                    DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
-                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+                    // 订阅LVAR列表响应
+                    simConnect.RequestClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST,
+                        DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
+                        SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
-                UpdateLVARResult("正在获取LVAR列表...");
-                */
+                    UpdateLVARResult("正在获取LVAR列表...");
+                    */
+                }
+                catch (Exception ex)
+                {
+                    isGettingLVARList = false;
+                    UpdateLVARResult($"获取LVAR列表失败: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                isGettingLVARList = false;
-                UpdateLVARResult($"获取LVAR列表失败: {ex.Message}");
+                UpdateLVARResult($"SimConnect没有连接！");
             }
         }
         private void RequestLVARBatch(int batch)
@@ -635,6 +708,7 @@ namespace SimConnectTester
             simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
             simConnect.ClearNotificationGroup(GROUP_ID.GROUP_1);
             simConnectConnected = false;
+            connectButton.Enabled = true;
         }
 
         private void SimConnect_OnRecvException(SimConnect sender, SIMCONNECT_RECV_EXCEPTION data)
@@ -718,7 +792,7 @@ namespace SimConnectTester
                     try
                     {
                         _logger.LogDebug($"取 {currentBatch} 批LVAR，共 {totalBatches} 批\n");
-                        _logger.LogDebug($"内容：{listResponse.lvarList}\n");
+                        //_logger.LogDebug($"内容：{listResponse.lvarList}\n");
                         // 解析当前批次的LVAR列表
                         var batchLVARs = System.Text.Json.JsonSerializer.Deserialize<string[]>(listResponse.lvarList);
                         if (batchLVARs != null)
@@ -1368,6 +1442,13 @@ namespace SimConnectTester
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            // 如果正在连接，先断开连接
+            if (simConnectConnected && simConnect != null)
+            {
+                disconnectButton.PerformClick(); // 触发断开连接
+                                                 // 可以添加短暂延迟等待断开完成
+                System.Threading.Thread.Sleep(100);
+            }
             simConnect?.Dispose();
         }
     }
