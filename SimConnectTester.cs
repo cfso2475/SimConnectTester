@@ -25,7 +25,8 @@ namespace SimConnectTester
         enum ClientDataID
         {
             LVAR_REQUEST,
-            LVAR_RESPONSE
+            LVAR_RESPONSE,
+            LVAR_LIST_RESPONSE_ID  // 新增
         }
         enum DEFINITIONS
         {
@@ -34,7 +35,8 @@ namespace SimConnectTester
             SIMVAR_DOUBLE,
             SIMVAR_STRING,
             LVAR_REQUEST_DEFINITION,  // 请求
-            LVAR_RESPONSE_DEFINITION  // 结果
+            LVAR_RESPONSE_DEFINITION,  // 结果
+            LVAR_LIST_RESPONSE_DEFINITION  // 新增
         }
 
         enum DATA_REQUESTS
@@ -43,7 +45,8 @@ namespace SimConnectTester
             RequestInputEvents,
             REQUEST_EnumerateInputEvents,
             REQUEST_LVAR_VALUE,  // LVAR Request
-            RESPONSE_LVAR_VALUE
+            RESPONSE_LVAR_VALUE,
+            RESPONSE_LVAR_LIST  // 新增
         }
 
         enum LVAR_EVENTS
@@ -62,6 +65,15 @@ namespace SimConnectTester
         {
             public double lvarValue;
         }
+
+        // 新增数据结构
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+        struct LVARListResponseData
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8192)]
+            public string lvarList;
+        }
+
 
         public enum SIMCONNECT_GROUP_PRIORITY : uint
         {
@@ -421,30 +433,54 @@ namespace SimConnectTester
             lvarGroupBox.Size = new Size(560, 150);
             this.Controls.Add(lvarGroupBox);
 
+            // LVAR 下拉列表
+            Label lvarSelectLabel = new Label();
+            lvarSelectLabel.Text = "选择LVAR:";
+            lvarSelectLabel.Location = new Point(20, 30);
+            lvarSelectLabel.Size = new Size(80, 20);
+            lvarGroupBox.Controls.Add(lvarSelectLabel);
+
+            ComboBox lvarComboBox = new ComboBox();
+            lvarComboBox.Name = "lvarComboBox";
+            lvarComboBox.Location = new Point(100, 27);
+            lvarComboBox.Size = new Size(300, 21);
+            lvarComboBox.DropDownStyle = ComboBoxStyle.DropDown;
+            lvarComboBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            lvarComboBox.AutoCompleteSource = AutoCompleteSource.ListItems;
+            lvarGroupBox.Controls.Add(lvarComboBox);
+
             // LVAR Name
             lvarNameLabel = new Label();
             lvarNameLabel.Text = "LVAR Name:";
-            lvarNameLabel.Location = new Point(20, 30);
+            lvarNameLabel.Location = new Point(20, 60);
             lvarNameLabel.Size = new Size(80, 20);
             lvarGroupBox.Controls.Add(lvarNameLabel);
 
             lvarNameTextBox = new TextBox();
-            lvarNameTextBox.Location = new Point(100, 27);
+            lvarNameTextBox.Location = new Point(100, 57);
             lvarNameTextBox.Size = new Size(300, 20);
             lvarGroupBox.Controls.Add(lvarNameTextBox);
 
             // 获取按钮
             lvarGetButton = new Button();
             lvarGetButton.Text = "获取LVAR值";
-            lvarGetButton.Location = new Point(420, 25);
+            lvarGetButton.Location = new Point(420, 57);
             lvarGetButton.Size = new Size(100, 30);
             lvarGetButton.Click += lvarGetButton_Click;
             lvarGroupBox.Controls.Add(lvarGetButton);
 
+            // 刷新列表按钮
+            Button refreshLvarListButton = new Button();
+            refreshLvarListButton.Text = "刷新列表";
+            refreshLvarListButton.Location = new Point(420, 27);
+            refreshLvarListButton.Size = new Size(100, 30);
+            refreshLvarListButton.Click += RefreshLvarListButton_Click;
+            lvarGroupBox.Controls.Add(refreshLvarListButton);
+
             // 结果显示
             lvarResultLabel = new Label();
             lvarResultLabel.Text = "LVAR值将显示在这里...";
-            lvarResultLabel.Location = new Point(20, 70);
+            lvarResultLabel.Location = new Point(20, 100);
             lvarResultLabel.Size = new Size(520, 60);
             lvarResultLabel.BorderStyle = BorderStyle.FixedSingle;
             lvarResultLabel.BackColor = Color.LightGray;
@@ -502,6 +538,12 @@ namespace SimConnectTester
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
 
+            // 新增：LVAR列表响应ClientData
+            simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LIST_RESPONSE_ID);
+            simConnect.CreateClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
+            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
+
             // 映射事件
             /*
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
@@ -510,7 +552,32 @@ namespace SimConnectTester
             // 订阅响应事件
             simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
             */
+            // 请求LVAR列表
+            RequestLVARList();
         }
+
+        private void RequestLVARList()
+        {
+            try
+            {
+                // 发送获取LVAR列表的请求
+                LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARList" };
+                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+
+                // 订阅LVAR列表响应
+                simConnect.RequestClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST,
+                    DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+
+                UpdateLVARResult("正在获取LVAR列表...");
+            }
+            catch (Exception ex)
+            {
+                UpdateLVARResult($"获取LVAR列表失败: {ex.Message}");
+            }
+        }
+
 
         private void SimConnect_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
         {
@@ -572,6 +639,11 @@ namespace SimConnectTester
                     LVARResponseData responseData = (LVARResponseData)data.dwData[0];
                     UpdateLVARResult($"LVAR值: {responseData.lvarValue} 返回数：{data.dwoutof}");
                     break;
+                case DATA_REQUESTS.RESPONSE_LVAR_LIST:
+                    // 处理LVAR列表响应
+                    LVARListResponseData listResponse = (LVARListResponseData)data.dwData[0];
+                    UpdateLVARList(listResponse.lvarList);
+                    break;
             }
         }
         #endregion
@@ -615,6 +687,43 @@ namespace SimConnectTester
             }
             lvarResultLabel.Text = message;
         }
+
+        // 新增方法：更新LVAR下拉列表
+        private void UpdateLVARList(string lvarListJson)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<string>(UpdateLVARList), lvarListJson);
+                return;
+            }
+
+            try
+            {
+                // 解析JSON数组
+                var lvarNames = System.Text.Json.JsonSerializer.Deserialize<string[]>(lvarListJson);
+
+                // 查找LVAR下拉列表控件
+                ComboBox lvarComboBox = lvarGroupBox.Controls.Find("lvarComboBox", true).FirstOrDefault() as ComboBox;
+
+                if (lvarComboBox != null && lvarNames != null)
+                {
+                    lvarComboBox.BeginUpdate();
+                    lvarComboBox.Items.Clear();
+                    foreach (var lvarName in lvarNames)
+                    {
+                        lvarComboBox.Items.Add(lvarName);
+                    }
+                    lvarComboBox.EndUpdate();
+
+                    UpdateLVARResult($"LVAR列表已更新，共 {lvarNames.Length} 个变量");
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateLVARResult($"解析LVAR列表失败: {ex.Message}");
+            }
+        }
+
         #endregion
 
         #region SimVar功能
@@ -1051,6 +1160,18 @@ namespace SimConnectTester
             }
 
             string lvarName = lvarNameTextBox.Text.Trim();
+
+            // 如果文本框为空，尝试从下拉列表获取
+            if (string.IsNullOrEmpty(lvarName))
+            {
+                ComboBox lvarComboBox = lvarGroupBox.Controls.Find("lvarComboBox", true).FirstOrDefault() as ComboBox;
+                if (lvarComboBox != null && lvarComboBox.SelectedItem != null)
+                {
+                    lvarName = lvarComboBox.SelectedItem.ToString();
+                    lvarNameTextBox.Text = lvarName; // 同步到文本框
+                }
+            }
+
             if (string.IsNullOrEmpty(lvarName))
             {
                 MessageBox.Show("LVAR名称不能为空", "警告", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1083,6 +1204,12 @@ namespace SimConnectTester
                 lvarResultLabel.Text = $"获取失败: {ex.Message}";
             }
         }
+        // 刷新列表按钮事件
+        private void RefreshLvarListButton_Click(object sender, EventArgs e)
+        {
+            RequestLVARList();
+        }
+
         #endregion
         protected override void WndProc(ref Message m)
         {
