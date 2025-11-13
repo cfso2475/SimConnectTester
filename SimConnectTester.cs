@@ -14,6 +14,13 @@ namespace SimConnectTester
 
         private readonly ILogger<SimConnectTester> _logger;
         // 定义SimConnect事件和变量
+
+        private int totalLVARCount = 0;
+        private int currentBatch = 0;
+        private int totalBatches = 0;
+        private List<string> allLVARs = new List<string>();
+        private bool isGettingLVARList = false;
+
         enum ClientDataID
         {
             LVAR_REQUEST,
@@ -38,7 +45,8 @@ namespace SimConnectTester
             REQUEST_EnumerateInputEvents,
             REQUEST_LVAR_VALUE,  // LVAR Request
             RESPONSE_LVAR_VALUE,
-            RESPONSE_LVAR_LIST  // 新增
+            RESPONSE_LVAR_LIST,  // 新增
+            RESPONSE_LVAR_LIST_COUNT
         }
 
         enum LVAR_EVENTS
@@ -62,7 +70,7 @@ namespace SimConnectTester
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
         struct LVARListResponseData
         {
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32768)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8192)]
             public string lvarList;
         }
 
@@ -550,8 +558,27 @@ namespace SimConnectTester
 
         private void RequestLVARList()
         {
+            if (isGettingLVARList) return;
             try
             {
+                isGettingLVARList = true;
+                allLVARs.Clear();
+                currentBatch = 0;
+                totalBatches = 0;
+
+                // 首先请求LVAR总数
+                LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARListCount" };
+                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+
+                // 订阅总数响应
+                simConnect.RequestClientData(ClientDataID.LVAR_RESPONSE, DATA_REQUESTS.RESPONSE_LVAR_VALUE,
+                    DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+
+                UpdateLVARResult("正在获取LVAR总数...");
+
+                /*
                 // 发送获取LVAR列表的请求
                 LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.GetLVARList" };
                 simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
@@ -563,13 +590,35 @@ namespace SimConnectTester
                     SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
                 UpdateLVARResult("正在获取LVAR列表...");
+                */
             }
             catch (Exception ex)
             {
+                isGettingLVARList = false;
                 UpdateLVARResult($"获取LVAR列表失败: {ex.Message}");
             }
         }
+        private void RequestLVARBatch(int batch)
+        {
+            try
+            {
+                // 发送批次请求
+                LVARRequestData requestData = new LVARRequestData { lvarName = $"WASM.GetLVARList.{batch}" };
+                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
+                // 订阅列表响应
+                simConnect.RequestClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST,
+                    DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+
+                UpdateLVARResult($"正在获取LVAR批次 {batch}/{totalBatches}...");
+            }
+            catch (Exception ex)
+            {
+                UpdateLVARResult($"获取LVAR批次 {batch} 失败: {ex.Message}");
+            }
+        }
 
         private void SimConnect_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
         {
@@ -632,11 +681,59 @@ namespace SimConnectTester
                     LVARResponseData responseData = (LVARResponseData)data.dwData[0];
                     UpdateLVARResult($"LVAR值: {responseData.lvarValue} 返回数：{data.dwoutof}");
                     break;
+
+                case DATA_REQUESTS.RESPONSE_LVAR_LIST_COUNT:
+                    // 处理LVAR总数响应
+                    LVARResponseData listcountData = (LVARResponseData)data.dwData[0];
+                    totalLVARCount = (int)listcountData.lvarValue;
+                    totalBatches = (totalLVARCount + 99) / 100; // 计算总批次数
+
+                    UpdateLVARResult($"找到 {totalLVARCount} 个LVAR，共 {totalBatches} 批");
+
+                    if (totalBatches > 0)
+                    {
+                        // 开始请求第一批
+                        currentBatch = 1;
+                        RequestLVARBatch(currentBatch);
+                    }
+                    else
+                    {
+                        isGettingLVARList = false;
+                        UpdateLVARList("[]"); // 空列表
+                    }
+                    break;
+
                 case DATA_REQUESTS.RESPONSE_LVAR_LIST:
                     // 处理LVAR列表响应
                     LVARListResponseData listResponse = (LVARListResponseData)data.dwData[0];
-                    _logger.LogDebug($"Received List:{listResponse.lvarList}");
-                    UpdateLVARList(listResponse.lvarList);
+                    try
+                    {
+                        // 解析当前批次的LVAR列表
+                        var batchLVARs = System.Text.Json.JsonSerializer.Deserialize<string[]>(listResponse.lvarList);
+                        if (batchLVARs != null)
+                        {
+                            allLVARs.AddRange(batchLVARs);
+                        }
+
+                        // 检查是否还有更多批次
+                        currentBatch++;
+                        if (currentBatch <= totalBatches)
+                        {
+                            // 请求下一批
+                            RequestLVARBatch(currentBatch);
+                        }
+                        else
+                        {
+                            // 所有批次完成，更新UI
+                            UpdateLVARListFromCollection(allLVARs);
+                            isGettingLVARList = false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdateLVARResult($"解析LVAR批次失败: {ex.Message}");
+                        isGettingLVARList = false;
+                    }
                     break;
             }
         }
@@ -717,7 +814,34 @@ namespace SimConnectTester
                 UpdateLVARResult($"解析LVAR列表失败: {ex.Message}");
             }
         }
+        private void UpdateLVARListFromCollection(List<string> lvarNames)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<List<string>>(UpdateLVARListFromCollection), lvarNames);
+                return;
+            }
 
+            try
+            {
+                ComboBox lvarComboBox = lvarGroupBox.Controls.Find("lvarComboBox", true).FirstOrDefault() as ComboBox;
+                if (lvarComboBox != null)
+                {
+                    lvarComboBox.BeginUpdate();
+                    lvarComboBox.Items.Clear();
+                    foreach (var lvarName in lvarNames)
+                    {
+                        lvarComboBox.Items.Add(lvarName);
+                    }
+                    lvarComboBox.EndUpdate();
+                    UpdateLVARResult($"LVAR列表已更新，共 {lvarNames.Count} 个变量");
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateLVARResult($"更新LVAR列表失败: {ex.Message}");
+            }
+        }
         #endregion
 
         #region SimVar功能
