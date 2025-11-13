@@ -72,7 +72,7 @@ namespace SimConnectTester
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
         struct LVARListResponseData
         {
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8192)]
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 4096)]
             public string lvarList;
         }
 
@@ -549,7 +549,7 @@ namespace SimConnectTester
             simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
             simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
-            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
+            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
 
 
             // 映射事件
@@ -561,7 +561,7 @@ namespace SimConnectTester
             simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
             */
             // 请求LVAR列表
-            RequestLVARList();
+            //RequestLVARList();
         }
 
         private void RequestLVARList()
@@ -838,9 +838,14 @@ namespace SimConnectTester
                 ComboBox lvarComboBox = lvarGroupBox.Controls.Find("lvarComboBox", true).FirstOrDefault() as ComboBox;
                 if (lvarComboBox != null)
                 {
+                    // 添加排序：对LVAR列表进行字母排序
+                    var sortedLVARs = lvarNames
+                        .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
                     lvarComboBox.BeginUpdate();
                     lvarComboBox.Items.Clear();
-                    foreach (var lvarName in lvarNames)
+                    foreach (var lvarName in sortedLVARs)
                     {
                         lvarComboBox.Items.Add(lvarName);
                     }
@@ -1110,6 +1115,16 @@ namespace SimConnectTester
                 if (simConnectInputEvents.Count > 1)
                 {
                     isInputEventsLoaded = true;
+
+                    var sortedItems = inputEventComboBox.Items.Cast<string>()
+                        .OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+
+                    inputEventComboBox.BeginUpdate();
+                    inputEventComboBox.Items.Clear();
+                    inputEventComboBox.Items.AddRange(sortedItems);
+                    inputEventComboBox.EndUpdate();
+
                     _logger.LogDebug($"In:OnRecvEventEnum isInputEventsLoaded is set:{isInputEventsLoaded}");
                 }
             }
@@ -1263,6 +1278,7 @@ namespace SimConnectTester
                 // 使用原始的事件名称列表进行过滤
                 var filteredItems = simConnectInputEvents.Keys
                     .Where(item => item.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderBy(item => item, StringComparer.OrdinalIgnoreCase) // 保持排序
                     .ToArray();
 
                 // 更新下拉列表的项，但不改变当前输入的文本
