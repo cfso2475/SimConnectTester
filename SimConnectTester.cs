@@ -558,7 +558,7 @@ namespace SimConnectTester
                 case DATA_REQUESTS.REQUEST_LVAR_VALUE:
                     // 处理LVAR数据返回
                     LVARResponseData responseData = (LVARResponseData)data.dwData[0];
-                    UpdateLVARResult($"LVAR值: {responseData.lvarValue}");
+                    UpdateLVARResult($"LVAR值: {responseData.lvarValue} 返回数：{data.dwoutof}");
                     break;
             }
         }
@@ -1056,14 +1056,13 @@ namespace SimConnectTester
                 //await Task.Delay(1000);
 
                 // 触发读取事件
-                simConnect.TransmitClientEvent(0, LVAR_EVENTS.EVENT_LVAR_READ, 0,
-                    SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+                //simConnect.TransmitClientEvent(0, LVAR_EVENTS.EVENT_LVAR_READ, 0, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
 
                 //await Task.Delay(1000);
                 // 订阅响应ClientData的变化
                 simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
-                    DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
-                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.CHANGED, 0, 0, 0);
+                    DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
                 lvarResultLabel.Text = "正在获取LVAR值...";
             }
