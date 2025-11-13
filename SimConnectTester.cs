@@ -546,8 +546,8 @@ namespace SimConnectTester
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
 
-            simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
-            simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
+            simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
 
@@ -697,6 +697,7 @@ namespace SimConnectTester
                     totalBatches = (totalLVARCount + 99) / 100; // 计算总批次数
 
                     UpdateLVARResult($"找到 {totalLVARCount} 个LVAR，共 {totalBatches} 批");
+                    _logger.LogDebug($"找到 {totalLVARCount} 个LVAR，共 {totalBatches} 批");
 
                     if (totalBatches > 0)
                     {
@@ -716,6 +717,8 @@ namespace SimConnectTester
                     LVARListResponseData listResponse = (LVARListResponseData)data.dwData[0];
                     try
                     {
+                        _logger.LogDebug($"取 {currentBatch} 批LVAR，共 {totalBatches} 批\n");
+                        _logger.LogDebug($"内容：{listResponse.lvarList}\n");
                         // 解析当前批次的LVAR列表
                         var batchLVARs = System.Text.Json.JsonSerializer.Deserialize<string[]>(listResponse.lvarList);
                         if (batchLVARs != null)
