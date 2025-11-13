@@ -22,6 +22,11 @@ namespace SimConnectTester
 
         private readonly ILogger<SimConnectTester> _logger;
         // 定义SimConnect事件和变量
+        enum ClientDataID
+        {
+            LVAR_REQUEST,
+            LVAR_RESPONSE
+        }
         enum DEFINITIONS
         {
             SimVarDefinition,
@@ -37,7 +42,8 @@ namespace SimConnectTester
             RequestSimVar,
             RequestInputEvents,
             REQUEST_EnumerateInputEvents,
-            REQUEST_LVAR_VALUE  // LVAR Request
+            REQUEST_LVAR_VALUE,  // LVAR Request
+            RESPONSE_LVAR_VALUE
         }
 
         enum LVAR_EVENTS
@@ -485,23 +491,25 @@ namespace SimConnectTester
             await EnumerateInputEvents();
             // 设置请求ClientData区域
             // 定义请求数据结构
-            simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", DEFINITIONS.LVAR_REQUEST_DEFINITION);
-            simConnect.CreateClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", ClientDataID.LVAR_REQUEST);
+            simConnect.CreateClientData(ClientDataID.LVAR_REQUEST, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
 
             // 定义响应数据结构
-            simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", DEFINITIONS.LVAR_RESPONSE_DEFINITION);
-            simConnect.CreateClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", ClientDataID.LVAR_RESPONSE);
+            simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
 
             // 映射事件
+            /*
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
 
             // 订阅响应事件
             simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
+            */
         }
 
         private void SimConnect_OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
@@ -530,32 +538,36 @@ namespace SimConnectTester
                     UpdateSimVarResult($"获取成功: {simVarValue}");
                     _logger.LogDebug($"获取成功: {simVarValue}");
                     break;
+                /*
                 case DATA_REQUESTS.REQUEST_LVAR_VALUE:
                     // 处理LVAR数据返回
                     LVARResponseData responseData = (LVARResponseData)data.dwData[0];
                     UpdateLVARResult($"LVAR值: {responseData.lvarValue}");
                     break;
+                */
             }
         }
 
         // 新增事件处理
         private void SimConnect_OnRecvEvent(SimConnect sender, SIMCONNECT_RECV_EVENT data)
         {
+            /*
             switch ((LVAR_EVENTS)data.uEventID)
             {
                 case LVAR_EVENTS.EVENT_LVAR_GOT:
                     // 请求响应数据
-                    simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
+                    simConnect.RequestClientData(ClientDataID.LVAR_RESPONSE, DATA_REQUESTS.REQUEST_LVAR_VALUE,
                         DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE, SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT,0,0,0);
                     break;
             }
+            */
         }
 
         private void SimConnect_OnRecvClientData(SimConnect sender, SIMCONNECT_RECV_CLIENT_DATA data)
         {
             switch ((DATA_REQUESTS)data.dwRequestID)
             {
-                case DATA_REQUESTS.REQUEST_LVAR_VALUE:
+                case DATA_REQUESTS.RESPONSE_LVAR_VALUE:
                     // 处理LVAR数据返回
                     LVARResponseData responseData = (LVARResponseData)data.dwData[0];
                     UpdateLVARResult($"LVAR值: {responseData.lvarValue} 返回数：{data.dwoutof}");
@@ -1049,10 +1061,10 @@ namespace SimConnectTester
             {
                 // 发送LVAR名称到ClientData
                 LVARRequestData requestData = new LVARRequestData { lvarName = lvarName };
-                simConnect.SetClientData(DEFINITIONS.LVAR_REQUEST_DEFINITION, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
                     SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
-                simConnect.ReceiveMessage();
+                //simConnect.ReceiveMessage();
                 //await Task.Delay(1000);
 
                 // 触发读取事件
@@ -1060,7 +1072,7 @@ namespace SimConnectTester
 
                 //await Task.Delay(1000);
                 // 订阅响应ClientData的变化
-                simConnect.RequestClientData(DEFINITIONS.LVAR_RESPONSE_DEFINITION, DATA_REQUESTS.REQUEST_LVAR_VALUE,
+                simConnect.RequestClientData(ClientDataID.LVAR_RESPONSE, DATA_REQUESTS.RESPONSE_LVAR_VALUE,
                     DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
                     SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
