@@ -25,7 +25,8 @@ namespace SimConnectTester
         {
             LVAR_REQUEST,
             LVAR_RESPONSE,
-            LVAR_LIST_RESPONSE_ID  // 新增
+            LVAR_LIST_RESPONSE_ID,  // 新增
+            LVAR_LISTCOUNT_RESPONSE_ID
         }
         enum DEFINITIONS
         {
@@ -35,7 +36,8 @@ namespace SimConnectTester
             SIMVAR_STRING,
             LVAR_REQUEST_DEFINITION,  // 请求
             LVAR_RESPONSE_DEFINITION,  // 结果
-            LVAR_LIST_RESPONSE_DEFINITION  // 新增
+            LVAR_LIST_RESPONSE_DEFINITION,  // 新增
+            LVAR_LISTCOUNT_RESPONSE_DEFINITION
         }
 
         enum DATA_REQUESTS
@@ -544,6 +546,12 @@ namespace SimConnectTester
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
 
+            simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
+            simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
+            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
+
+
             // 映射事件
             /*
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
@@ -572,8 +580,8 @@ namespace SimConnectTester
                     SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
 
                 // 订阅总数响应
-                simConnect.RequestClientData(ClientDataID.LVAR_RESPONSE, DATA_REQUESTS.RESPONSE_LVAR_VALUE,
-                    DEFINITIONS.LVAR_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ONCE,
+                simConnect.RequestClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, DATA_REQUESTS.RESPONSE_LVAR_LIST_COUNT,
+                    DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
                     SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
                 UpdateLVARResult("正在获取LVAR总数...");
