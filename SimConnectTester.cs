@@ -171,6 +171,7 @@ namespace SimConnectTester
         private TextBox lvarNameTextBox;
         private Button lvarGetButton;
         private Label lvarResultLabel;
+        private Button refreshLvarListButton;
 
 
         // 状态标签
@@ -489,7 +490,7 @@ namespace SimConnectTester
             lvarGroupBox.Controls.Add(lvarGetButton);
 
             // 刷新列表按钮
-            Button refreshLvarListButton = new Button();
+            refreshLvarListButton = new Button();
             refreshLvarListButton.Text = "刷新列表";
             refreshLvarListButton.Location = new Point(420, 27);
             refreshLvarListButton.Size = new Size(100, 30);
@@ -562,6 +563,7 @@ namespace SimConnectTester
             {
                 InitializeSimConnect();
                 connectButton.Enabled = false;
+                refreshLvarListButton.Enabled = false;
                 UpdateStatus("正在连接...");
                 Application.Idle += Application_Idle;
             }
@@ -668,7 +670,9 @@ namespace SimConnectTester
             
 
             _logger.LogDebug("Created Client Data Area");
+            UpdateStatus("LVAR 数据区域注册完成");
             disconnectButton.Enabled = true;
+            refreshLvarListButton.Enabled = true;
             // 映射事件
             /*
             simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
@@ -885,6 +889,7 @@ namespace SimConnectTester
                         isGettingLVARList = false;
                         UpdateLVARList("[]"); // 空列表
                     }
+                    refreshLvarListButton.Enabled = true;
                     break;
 
                 case DATA_REQUESTS.RESPONSE_LVAR_LIST:
@@ -1527,6 +1532,7 @@ namespace SimConnectTester
         // 刷新列表按钮事件
         private void RefreshLvarListButton_Click(object sender, EventArgs e)
         {
+            refreshLvarListButton.Enabled = false;
             RequestLVARList();
         }
 
