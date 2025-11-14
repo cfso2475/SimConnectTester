@@ -199,16 +199,27 @@ namespace SimConnectTester
             _logger.LogDebug($"In InitializeSimConnect");
             try
             {
+
+                // 确保窗口句柄有效
+                if (!this.IsHandleCreated)
+                {
+                    _logger.LogDebug("窗口句柄未创建，正在创建...");
+                    var handle = this.Handle;
+                }
+
+                _logger.LogDebug($"使用窗口句柄: {this.Handle}");
+
                 simConnect = new SimConnect("SimConnectTester", this.Handle, 0x402, null, 0);
-                _logger.LogDebug($"trigger SimConnect");
+                _logger.LogDebug($"SimConnect对象创建成功");
+                simConnect.ReceiveMessage();
                 // 注册SimConnect事件处理
                 simConnect.OnRecvOpen += new SimConnect.RecvOpenEventHandler(SimConnect_OnRecvOpen);
                 simConnect.OnRecvQuit += new SimConnect.RecvQuitEventHandler(SimConnect_OnRecvQuit);
                 simConnect.OnRecvException += new SimConnect.RecvExceptionEventHandler(SimConnect_OnRecvException);
                 simConnect.OnRecvSimobjectData += new SimConnect.RecvSimobjectDataEventHandler(SimConnect_OnRecvSimobjectData);
-                simConnect.OnRecvEnumerateInputEvents += OnRecvEventEnum;
-                simConnect.OnRecvEnumerateInputEventParams += OnRecvEventEnumParams;
-                simConnect.OnRecvGetInputEvent += OnRecvGetInputEvent;
+                simConnect.OnRecvEnumerateInputEvents += new SimConnect.RecvEnumerateInputEventsEventHandler(OnRecvEventEnum);
+                simConnect.OnRecvEnumerateInputEventParams += new SimConnect.RecvEnumerateInputEventParamsEventHandler(OnRecvEventEnumParams);
+                simConnect.OnRecvGetInputEvent += new SimConnect.RecvGetInputEventEventHandler(OnRecvGetInputEvent);
                 simConnect.OnRecvEvent += new SimConnect.RecvEventEventHandler(SimConnect_OnRecvEvent);
                 simConnect.OnRecvClientData += new SimConnect.RecvClientDataEventHandler(SimConnect_OnRecvClientData);
                 _logger.LogDebug($"registered events");
@@ -239,6 +250,7 @@ namespace SimConnectTester
 
             // 设置Tab顺序
             SetTabOrder();
+            _logger.LogDebug($"初始化的窗口句柄: {this.Handle}");
         }
 
         private void InitializeSimVarSection()
@@ -497,7 +509,7 @@ namespace SimConnectTester
         {
             statusLabel = new Label();
             statusLabel.Text = "状态: 未连接";
-            statusLabel.Location = new Point(20, 620);
+            statusLabel.Location = new Point(20, 820);
             statusLabel.Size = new Size(560, 20);
             statusLabel.BorderStyle = BorderStyle.FixedSingle;
             statusLabel.BackColor = SystemColors.Info;
@@ -551,12 +563,43 @@ namespace SimConnectTester
                 InitializeSimConnect();
                 connectButton.Enabled = false;
                 UpdateStatus("正在连接...");
+                Application.Idle += Application_Idle;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"连接失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 UpdateStatus("连接失败");
             }
+        }
+        private void Application_Idle(object sender, EventArgs e)
+        {
+            //_logger.LogDebug("in Application_Idle");
+            // 处理SimConnect消息
+            try
+            {
+                if (simConnectConnected && simConnect != null)
+                {
+                    //_logger.LogDebug("connected:" + connected + "simConnect:"+simConnect.ToString());
+
+                    simConnect.ReceiveMessage();
+                }
+                else
+                {
+                    //_logger.LogDebug("connected:" + connected + "simConnect:null");
+                }
+            }
+            catch (DllNotFoundException)
+            {
+                // 提示用户安装 SimConnect 或检查依赖项
+                //MessageBox.Show("请确保 SimConnect 已正确安装。\n\n如果没有安装 Microsoft Flight Simulator，可能需要安装 SimConnect 运行时。");
+                _logger.LogDebug("请确保 SimConnect 已正确安装。\n\n如果没有安装 Microsoft Flight Simulator，可能需要安装 SimConnect 运行时。");
+                return;
+            }
+            catch (Exception es)
+            {
+                _logger.LogError(es.Message);
+            }
+
         }
 
         // 添加断开按钮点击事件处理
@@ -713,7 +756,55 @@ namespace SimConnectTester
 
         private void SimConnect_OnRecvException(SimConnect sender, SIMCONNECT_RECV_EXCEPTION data)
         {
-            UpdateStatus($"SimConnect异常: {data.dwException}");
+            string exceptionText = GetExceptionText(data.dwException);
+            _logger.LogError($"SimConnect异常: {data.dwException} - {exceptionText}");
+            UpdateStatus($"SimConnect异常: {exceptionText}");
+        }
+
+        private string GetExceptionText(uint exception)
+        {
+            switch (exception)
+            {
+                case 0x00000001: return "SIMCONNECT_EXCEPTION_NONE";
+                case 0x00000002: return "SIMCONNECT_EXCEPTION_ERROR";
+                case 0x00000003: return "SIMCONNECT_EXCEPTION_SIZE_MISMATCH";
+                case 0x00000004: return "SIMCONNECT_EXCEPTION_UNRECOGNIZED_ID";
+                case 0x00000005: return "SIMCONNECT_EXCEPTION_UNOPENED";
+                case 0x00000006: return "SIMCONNECT_EXCEPTION_VERSION_MISMATCH";
+                case 0x00000007: return "SIMCONNECT_EXCEPTION_TOO_MANY_GROUPS";
+                case 0x00000008: return "SIMCONNECT_EXCEPTION_NAME_UNRECOGNIZED";
+                case 0x00000009: return "SIMCONNECT_EXCEPTION_TOO_MANY_EVENT_NAMES";
+                case 0x0000000A: return "SIMCONNECT_EXCEPTION_EVENT_ID_DUPLICATE";
+                case 0x0000000B: return "SIMCONNECT_EXCEPTION_TOO_MANY_MAPS";
+                case 0x0000000C: return "SIMCONNECT_EXCEPTION_TOO_MANY_OBJECTS";
+                case 0x0000000D: return "SIMCONNECT_EXCEPTION_TOO_MANY_REQUESTS";
+                case 0x0000000E: return "SIMCONNECT_EXCEPTION_WEATHER_INVALID_PORT";
+                case 0x0000000F: return "SIMCONNECT_EXCEPTION_WEATHER_INVALID_METAR";
+                case 0x00000010: return "SIMCONNECT_EXCEPTION_WEATHER_UNABLE_TO_GET_OBSERVATION";
+                case 0x00000011: return "SIMCONNECT_EXCEPTION_WEATHER_UNABLE_TO_CREATE_STATION";
+                case 0x00000012: return "SIMCONNECT_EXCEPTION_WEATHER_UNABLE_TO_REMOVE_STATION";
+                case 0x00000013: return "SIMCONNECT_EXCEPTION_INVALID_DATA_TYPE";
+                case 0x00000014: return "SIMCONNECT_EXCEPTION_INVALID_DATA_SIZE";
+                case 0x00000015: return "SIMCONNECT_EXCEPTION_DATA_ERROR";
+                case 0x00000016: return "SIMCONNECT_EXCEPTION_INVALID_ARRAY";
+                case 0x00000017: return "SIMCONNECT_EXCEPTION_CREATE_OBJECT_FAILED";
+                case 0x00000018: return "SIMCONNECT_EXCEPTION_LOAD_FLIGHTPLAN_FAILED";
+                case 0x00000019: return "SIMCONNECT_EXCEPTION_OPERATION_INVALID_FOR_OBJECT_TYPE";
+                case 0x0000001A: return "SIMCONNECT_EXCEPTION_ILLEGAL_OPERATION";
+                case 0x0000001B: return "SIMCONNECT_EXCEPTION_ALREADY_SUBSCRIBED";
+                case 0x0000001C: return "SIMCONNECT_EXCEPTION_INVALID_ENUM";
+                case 0x0000001D: return "SIMCONNECT_EXCEPTION_DEFINITION_ERROR";
+                case 0x0000001E: return "SIMCONNECT_EXCEPTION_DUPLICATE_ID";
+                case 0x0000001F: return "SIMCONNECT_EXCEPTION_DATUM_ID";
+                case 0x00000020: return "SIMCONNECT_EXCEPTION_OUT_OF_BOUNDS";
+                case 0x00000021: return "SIMCONNECT_EXCEPTION_ALREADY_CREATED";
+                case 0x00000022: return "SIMCONNECT_EXCEPTION_OBJECT_OUTSIDE_REALITY_BUBBLE";
+                case 0x00000023: return "SIMCONNECT_EXCEPTION_OBJECT_CONTAINER";
+                case 0x00000024: return "SIMCONNECT_EXCEPTION_OBJECT_AI";
+                case 0x00000025: return "SIMCONNECT_EXCEPTION_OBJECT_ATC";
+                case 0x00000026: return "SIMCONNECT_EXCEPTION_OBJECT_SCHEDULE";
+                default: return $"未知异常: {exception}";
+            }
         }
 
         private void SimConnect_OnRecvSimobjectData(SimConnect sender, SIMCONNECT_RECV_SIMOBJECT_DATA data)
@@ -1433,9 +1524,17 @@ namespace SimConnectTester
         protected override void WndProc(ref Message m)
         {
             // 处理SimConnect消息
-            if (simConnectConnected && m.Msg == 0x402) // WM_USER_SIMCONNECT
+            if (m.Msg == 0x402) // WM_USER_SIMCONNECT
             {
-                simConnect?.ReceiveMessage();
+                //_logger.LogDebug("处理SimConnect消息");
+                try
+                {
+                    simConnect?.ReceiveMessage();
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError($"处理SimConnect消息时出错: {ex.Message} \n {ex.StackTrace}");
+                }
             }
             base.WndProc(ref m);
         }
