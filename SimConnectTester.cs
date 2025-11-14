@@ -613,7 +613,7 @@ namespace SimConnectTester
                     simConnect = null;
                 }
                 simConnectConnected = false;
-                //connectButton.Enabled = true;
+                connectButton.Enabled = true;
                 disconnectButton.Enabled = false;
                 UpdateStatus("已断开连接");
             }
@@ -637,27 +637,35 @@ namespace SimConnectTester
 
             // 设置请求ClientData区域
             // 定义请求数据结构
+            _logger.LogDebug("start LVAR_REQUEST");
             simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", ClientDataID.LVAR_REQUEST);
             simConnect.CreateClientData(ClientDataID.LVAR_REQUEST, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
+            //await Task.Delay(10000);
 
             // 定义响应数据结构
+            _logger.LogDebug("start LVAR_RESPONSE");
             simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", ClientDataID.LVAR_RESPONSE);
             simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+            //await Task.Delay(10000);
 
             // 新增：LVAR列表响应ClientData
+            _logger.LogDebug("start LVAR_LIST_RESPONSE_ID");
             simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LIST_RESPONSE_ID);
             simConnect.CreateClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
+            //await Task.Delay(10000);
 
+            _logger.LogDebug("start LVAR_LISTCOUNT_RESPONSE_ID");
             simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
             simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
             simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
             simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
+            
 
             _logger.LogDebug("Created Client Data Area");
             disconnectButton.Enabled = true;
@@ -749,6 +757,8 @@ namespace SimConnectTester
             UpdateStatus("Flight Simulator已断开连接");
             simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION);
             simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+            simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
+            simConnect.ClearClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
             simConnect.ClearNotificationGroup(GROUP_ID.GROUP_1);
             simConnectConnected = false;
             connectButton.Enabled = true;
@@ -883,7 +893,7 @@ namespace SimConnectTester
                     try
                     {
                         _logger.LogDebug($"取 {currentBatch} 批LVAR，共 {totalBatches} 批\n");
-                        //_logger.LogDebug($"内容：{listResponse.lvarList}\n");
+                        _logger.LogDebug($"内容：{listResponse.lvarList}\n");
                         // 解析当前批次的LVAR列表
                         var batchLVARs = System.Text.Json.JsonSerializer.Deserialize<string[]>(listResponse.lvarList);
                         if (batchLVARs != null)
