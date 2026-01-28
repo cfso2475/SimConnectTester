@@ -21,12 +21,15 @@ namespace SimConnectTester
         private List<string> allLVARs = new List<string>();
         private bool isGettingLVARList = false;
 
+        // 在类定义中添加这个成员变量
+        private FlightPlanInfo _lastFlightPlanInfo;
         enum ClientDataID
         {
             LVAR_REQUEST,
             LVAR_RESPONSE,
             LVAR_LIST_RESPONSE_ID,  // 新增
-            LVAR_LISTCOUNT_RESPONSE_ID
+            LVAR_LISTCOUNT_RESPONSE_ID,
+            FLIGHT_PLAN_RESPONSE_ID  // 新增：用于返回飞行计划
         }
         enum DEFINITIONS
         {
@@ -37,7 +40,8 @@ namespace SimConnectTester
             LVAR_REQUEST_DEFINITION,  // 请求
             LVAR_RESPONSE_DEFINITION,  // 结果
             LVAR_LIST_RESPONSE_DEFINITION,  // 新增
-            LVAR_LISTCOUNT_RESPONSE_DEFINITION
+            LVAR_LISTCOUNT_RESPONSE_DEFINITION,
+            FLIGHT_PLAN_RESPONSE_DEFINITION  // 新增：飞行计划响应定义
         }
 
         enum DATA_REQUESTS
@@ -48,7 +52,9 @@ namespace SimConnectTester
             REQUEST_LVAR_VALUE,  // LVAR Request
             RESPONSE_LVAR_VALUE,
             RESPONSE_LVAR_LIST,  // 新增
-            RESPONSE_LVAR_LIST_COUNT
+            RESPONSE_LVAR_LIST_COUNT,
+            REQUEST_FLIGHT_PLAN,      // 新增：飞行计划请求
+            RESPONSE_FLIGHT_PLAN      // 新增：飞行计划响应
         }
 
         enum LVAR_EVENTS
@@ -75,7 +81,30 @@ namespace SimConnectTester
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 4096)]
             public string lvarList;
         }
+        
+        //飞行计划响应数据结构
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+        struct FlightPlanResponseData
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8192)]
+            public string flightPlanJson;
+        }
 
+        //显示飞行计划的结构（可选，用于格式化显示）
+        // 显示飞行计划的结构（可选，用于格式化显示）
+        public class FlightPlanInfo
+        {
+            public string? Departure { get; set; }
+            public string? Destination { get; set; }
+            public string? Runway { get; set; }
+            public int CruiseAltitude { get; set; }
+            public int WaypointCount { get; set; }
+            public List<string>? Waypoints { get; set; }
+            public string? Approach { get; set; } // 新增：进近信息
+            public string? RawJson { get; set; }
+            public bool HasError { get; set; }
+            public string? ErrorMessage { get; set; }
+        }
 
         public enum SIMCONNECT_GROUP_PRIORITY : uint
         {
@@ -248,6 +277,7 @@ namespace SimConnectTester
             InitializeLVARSection();
             InitializeStatusLabel();
             InitializeConnectionButtons();
+            InitializeFlightPlanSection();  // 添加这一行
 
             // 设置Tab顺序
             SetTabOrder();
@@ -555,6 +585,78 @@ namespace SimConnectTester
             lvarNameTextBox.TabIndex = 13;  // 新增
             lvarGetButton.TabIndex = 14;    // 新增
         }
+        private void InitializeFlightPlanSection()
+        {
+            // 飞行计划GroupBox
+            GroupBox flightPlanGroupBox = new GroupBox();
+            flightPlanGroupBox.Text = "飞行计划";
+            flightPlanGroupBox.Location = new Point(20, 790);  // 调整位置
+            flightPlanGroupBox.Size = new Size(560, 200);
+            flightPlanGroupBox.Name = "flightPlanGroupBox";
+            this.Controls.Add(flightPlanGroupBox);
+
+            // 更新窗体高度
+            this.ClientSize = new System.Drawing.Size(600, 1000);  // 增加高度
+
+            // 获取飞行计划按钮
+            Button getFlightPlanButton = new Button();
+            getFlightPlanButton.Text = "获取飞行计划";
+            getFlightPlanButton.Location = new Point(20, 30);
+            getFlightPlanButton.Size = new Size(120, 30);
+            getFlightPlanButton.Click += GetFlightPlanButton_Click;
+            getFlightPlanButton.Name = "getFlightPlanButton";
+            flightPlanGroupBox.Controls.Add(getFlightPlanButton);
+
+            // 清除按钮
+            Button clearFlightPlanButton = new Button();
+            clearFlightPlanButton.Text = "清除";
+            clearFlightPlanButton.Location = new Point(150, 30);
+            clearFlightPlanButton.Size = new Size(80, 30);
+            clearFlightPlanButton.Click += ClearFlightPlanButton_Click;
+            flightPlanGroupBox.Controls.Add(clearFlightPlanButton);
+
+            // 格式化JSON按钮
+            Button formatJsonButton = new Button();
+            formatJsonButton.Text = "格式化JSON";
+            formatJsonButton.Location = new Point(240, 30);
+            formatJsonButton.Size = new Size(100, 30);
+            formatJsonButton.Click += FormatJsonButton_Click;
+            flightPlanGroupBox.Controls.Add(formatJsonButton);
+
+            // 状态标签
+            Label flightPlanStatusLabel = new Label();
+            flightPlanStatusLabel.Text = "状态: 等待请求";
+            flightPlanStatusLabel.Location = new Point(350, 35);
+            flightPlanStatusLabel.Size = new Size(200, 20);
+            flightPlanStatusLabel.Name = "flightPlanStatusLabel";
+            flightPlanGroupBox.Controls.Add(flightPlanStatusLabel);
+
+            // 飞行计划显示文本框（多行）
+            TextBox flightPlanTextBox = new TextBox();
+            flightPlanTextBox.Multiline = true;
+            flightPlanTextBox.ScrollBars = ScrollBars.Both;
+            flightPlanTextBox.Location = new Point(20, 70);
+            flightPlanTextBox.Size = new Size(520, 120);
+            flightPlanTextBox.Font = new Font("Consolas", 9);  // 使用等宽字体显示JSON
+            flightPlanTextBox.Name = "flightPlanTextBox";
+            flightPlanGroupBox.Controls.Add(flightPlanTextBox);
+
+            // 调整其他控件的位置
+            if (statusLabel != null)
+            {
+                statusLabel.Location = new Point(20, 1000);  // 向下移动
+            }
+
+            if (connectButton != null)
+            {
+                connectButton.Location = new Point(20, 960);
+            }
+
+            if (disconnectButton != null)
+            {
+                disconnectButton.Location = new Point(140, 960);
+            }
+        }
 
         // 添加连接按钮点击事件处理
         private void ConnectButton_Click(object sender, EventArgs e)
@@ -629,60 +731,79 @@ namespace SimConnectTester
         #region SimConnect事件处理
         private async void SimConnect_OnRecvOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
         {
-            _logger.LogDebug("SimConnect连接成功");
-            UpdateStatus("已连接到Microsoft Flight Simulator");
-            simConnectConnected = true;
-            
+            try
+            {
+                _logger.LogDebug("SimConnect连接成功");
+                UpdateStatus("已连接到Microsoft Flight Simulator");
+                simConnectConnected = true;
 
-            await EnumerateInputEvents();
-            _logger.LogDebug("Triggered EnumerateInputEvents");
 
-            // 设置请求ClientData区域
-            // 定义请求数据结构
-            _logger.LogDebug("start LVAR_REQUEST");
-            simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", ClientDataID.LVAR_REQUEST);
-            simConnect.CreateClientData(ClientDataID.LVAR_REQUEST, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256, 0, 0);
-            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
-            //await Task.Delay(10000);
+                await EnumerateInputEvents();
+                _logger.LogDebug("Triggered EnumerateInputEvents");
 
-            // 定义响应数据结构
-            _logger.LogDebug("start LVAR_RESPONSE");
-            simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", ClientDataID.LVAR_RESPONSE);
-            simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
-            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
-            //await Task.Delay(10000);
+                // 设置请求ClientData区域
+                // 定义请求数据结构
+                _logger.LogDebug("start LVAR_REQUEST");
+                simConnect.MapClientDataNameToID("CVCWASMDATA_REQUEST", ClientDataID.LVAR_REQUEST);
+                simConnect.CreateClientData(ClientDataID.LVAR_REQUEST, 256, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_REQUEST_DEFINITION, 0, 256, 0, 0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARRequestData>(DEFINITIONS.LVAR_REQUEST_DEFINITION);
+                //await Task.Delay(10000);
 
-            // 新增：LVAR列表响应ClientData
-            _logger.LogDebug("start LVAR_LIST_RESPONSE_ID");
-            simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LIST_RESPONSE_ID);
-            simConnect.CreateClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
-            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
-            //await Task.Delay(10000);
+                // 定义响应数据结构
+                _logger.LogDebug("start LVAR_RESPONSE");
+                simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", ClientDataID.LVAR_RESPONSE);
+                simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
+                //await Task.Delay(10000);
 
-            _logger.LogDebug("start LVAR_LISTCOUNT_RESPONSE_ID");
-            simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
-            simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-            simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
-            simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
-            
+                // 新增：LVAR列表响应ClientData
+                _logger.LogDebug("start LVAR_LIST_RESPONSE_ID");
+                simConnect.MapClientDataNameToID("CVCWASMDATA_LIST_RESPONSE", ClientDataID.LVAR_LIST_RESPONSE_ID);
+                simConnect.CreateClientData(ClientDataID.LVAR_LIST_RESPONSE_ID, 4096, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION, 0, 4096, 0, 0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARListResponseData>(DEFINITIONS.LVAR_LIST_RESPONSE_DEFINITION);
+                //await Task.Delay(10000);
 
-            _logger.LogDebug("Created Client Data Area");
-            UpdateStatus("LVAR 数据区域注册完成");
-            disconnectButton.Enabled = true;
-            refreshLvarListButton.Enabled = true;
-            // 映射事件
-            /*
-            simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
-            simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
+                _logger.LogDebug("start LVAR_LISTCOUNT_RESPONSE_ID");
+                simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
+                simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
 
-            // 订阅响应事件
-            simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
-            */
-            // 请求LVAR列表
-            //RequestLVARList();
+
+                _logger.LogDebug("Created Client Data Area");
+                UpdateStatus("LVAR 数据区域注册完成");
+                disconnectButton.Enabled = true;
+                refreshLvarListButton.Enabled = true;
+                // 映射事件
+                /*
+                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_READ, "CVC.LVARREAD");
+                simConnect.MapClientEventToSimEvent(LVAR_EVENTS.EVENT_LVAR_GOT, "CVC.LVARGOT");
+
+                // 订阅响应事件
+                simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, LVAR_EVENTS.EVENT_LVAR_GOT, false);
+                */
+                // 请求LVAR列表
+                //RequestLVARList();
+
+                _logger.LogDebug("开始注册飞行计划ClientData");
+
+                // 注册飞行计划响应ClientData
+                simConnect.MapClientDataNameToID("CVCWASMDATA_FLIGHT_PLAN_RESPONSE", ClientDataID.FLIGHT_PLAN_RESPONSE_ID);
+                simConnect.CreateClientData(ClientDataID.FLIGHT_PLAN_RESPONSE_ID, 8192, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.FLIGHT_PLAN_RESPONSE_DEFINITION, 0, 8192, 0, 0);
+                simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, FlightPlanResponseData>(DEFINITIONS.FLIGHT_PLAN_RESPONSE_DEFINITION);
+
+                _logger.LogDebug("飞行计划ClientData注册完成");
+                UpdateStatus("飞行计划数据区域注册完成");
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"ClientData注册失败: {ex.Message}");
+            }
         }
 
         private void RequestLVARList()
@@ -925,6 +1046,11 @@ namespace SimConnectTester
                         UpdateLVARResult($"解析LVAR批次失败: {ex.Message}");
                         isGettingLVARList = false;
                     }
+                    break;
+                case DATA_REQUESTS.RESPONSE_FLIGHT_PLAN:
+                    // 处理飞行计划响应
+                    _logger.LogDebug($"处理飞行计划响应\n");
+                    HandleFlightPlanResponse(data);
                     break;
             }
         }
@@ -1564,7 +1690,368 @@ namespace SimConnectTester
                                                  // 可以添加短暂延迟等待断开完成
                 System.Threading.Thread.Sleep(100);
             }
+            try
+            {
+                if (simConnectConnected && simConnect != null)
+                {
+                    simConnect.ClearClientDataDefinition(DEFINITIONS.FLIGHT_PLAN_RESPONSE_DEFINITION);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"清理飞行计划ClientData失败: {ex.Message}");
+            }
             simConnect?.Dispose();
+        }
+
+        // 3.1 获取飞行计划按钮点击事件
+        private void GetFlightPlanButton_Click(object sender, EventArgs e)
+        {
+            if (!simConnectConnected)
+            {
+                MessageBox.Show("SimConnect未连接", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                // 发送REQFLN请求
+                LVARRequestData requestData = new LVARRequestData { lvarName = "WASM.REQFLN" };
+                simConnect.SetClientData(ClientDataID.LVAR_REQUEST, DEFINITIONS.LVAR_REQUEST_DEFINITION,
+                    SIMCONNECT_CLIENT_DATA_SET_FLAG.DEFAULT, 0, requestData);
+
+                // 订阅飞行计划响应
+                simConnect.RequestClientData(ClientDataID.FLIGHT_PLAN_RESPONSE_ID, DATA_REQUESTS.RESPONSE_FLIGHT_PLAN,
+                    DEFINITIONS.FLIGHT_PLAN_RESPONSE_DEFINITION, SIMCONNECT_CLIENT_DATA_PERIOD.ON_SET,
+                    SIMCONNECT_CLIENT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+
+                UpdateFlightPlanStatus("正在获取飞行计划...");
+                UpdateFlightPlanText("正在从WASM模块获取飞行计划数据...");
+            }
+            catch (Exception ex)
+            {
+                UpdateFlightPlanText($"发送飞行计划请求失败: {ex.Message}");
+                UpdateFlightPlanStatus("请求失败");
+            }
+        }
+
+        // 3.2 清除按钮事件
+        private void ClearFlightPlanButton_Click(object sender, EventArgs e)
+        {
+            UpdateFlightPlanText("");
+            UpdateFlightPlanStatus("已清除");
+        }
+
+        // 3.3 格式化JSON按钮事件
+        private void FormatJsonButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                TextBox flightPlanTextBox = GetFlightPlanTextBox();
+                _logger.LogDebug("飞行计划json:" + _lastFlightPlanInfo.RawJson);
+
+                if (_lastFlightPlanInfo != null && !string.IsNullOrEmpty(_lastFlightPlanInfo.RawJson))
+                {
+
+                    // 使用保存的原始JSON进行格式化
+                    var jsonObject = System.Text.Json.JsonDocument.Parse(_lastFlightPlanInfo.RawJson);
+                    var formattedJson = System.Text.Json.JsonSerializer.Serialize(jsonObject,
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
+                    flightPlanTextBox.Text = formattedJson;
+                    UpdateFlightPlanStatus("JSON已格式化");
+                }
+                
+            }
+            catch (Exception ex)
+            {
+                UpdateFlightPlanText($"JSON格式化失败: {ex.Message}\n原始内容:\n{GetFlightPlanTextBox()?.Text}");
+            }
+        }
+
+        // 3.4 获取飞行计划文本框的辅助方法
+        private TextBox GetFlightPlanTextBox()
+        {
+            GroupBox flightPlanGroupBox = this.Controls.Find("flightPlanGroupBox", true).FirstOrDefault() as GroupBox;
+            if (flightPlanGroupBox != null)
+            {
+                return flightPlanGroupBox.Controls.Find("flightPlanTextBox", true).FirstOrDefault() as TextBox;
+            }
+            return null;
+        }
+
+        // 3.5 更新飞行计划状态的辅助方法
+        private void UpdateFlightPlanStatus(string message)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<string>(UpdateFlightPlanStatus), message);
+                return;
+            }
+
+            GroupBox flightPlanGroupBox = this.Controls.Find("flightPlanGroupBox", true).FirstOrDefault() as GroupBox;
+            if (flightPlanGroupBox != null)
+            {
+                Label statusLabel = flightPlanGroupBox.Controls.Find("flightPlanStatusLabel", true).FirstOrDefault() as Label;
+                if (statusLabel != null)
+                {
+                    statusLabel.Text = $"状态: {message}";
+                }
+            }
+        }
+
+        // 3.6 更新飞行计划文本的辅助方法
+        private void UpdateFlightPlanText(string text)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<string>(UpdateFlightPlanText), text);
+                return;
+            }
+
+            TextBox flightPlanTextBox = GetFlightPlanTextBox();
+            if (flightPlanTextBox != null)
+            {
+                flightPlanTextBox.Text = text;
+            }
+        }
+
+        // 5.1 添加飞行计划响应处理函数
+        private void HandleFlightPlanResponse(SIMCONNECT_RECV_CLIENT_DATA data)
+        {
+            try
+            {
+                FlightPlanResponseData responseData = (FlightPlanResponseData)data.dwData[0];
+
+                if (!string.IsNullOrEmpty(responseData.flightPlanJson))
+                {
+                    // 尝试解析JSON
+                    _logger.LogDebug($"收到飞行计划JSON: {responseData.flightPlanJson}");
+                    var flightPlanInfo = ParseFlightPlanJson(responseData.flightPlanJson);
+                    // 保存到类变量
+                    _lastFlightPlanInfo = flightPlanInfo;
+
+                    if (flightPlanInfo.HasError)
+                    {
+                        UpdateFlightPlanText($"错误: {flightPlanInfo.ErrorMessage}\n\n原始JSON:\n{responseData.flightPlanJson}");
+                        UpdateFlightPlanStatus("收到错误响应");
+                    }
+                    else
+                    {
+                        // 格式化显示
+                        string displayText = FormatFlightPlanForDisplay(flightPlanInfo);
+                        UpdateFlightPlanText(displayText);
+                        UpdateFlightPlanStatus($"收到飞行计划 ({flightPlanInfo.WaypointCount}个航点)");
+
+                        // 记录日志
+                        _logger.LogDebug($"收到飞行计划: {flightPlanInfo.Departure} -> {flightPlanInfo.Destination}");
+                    }
+                }
+                else
+                {
+                    UpdateFlightPlanText("收到空的飞行计划响应");
+                    UpdateFlightPlanStatus("空响应");
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateFlightPlanText($"处理飞行计划响应失败: {ex.Message} \n {ex.StackTrace}");
+                UpdateFlightPlanStatus("处理失败");
+                _logger.LogError($"处理飞行计划响应失败: {ex.Message} \n {ex.StackTrace}");
+            }
+        }
+
+        // 5.2 添加解析飞行计划JSON的辅助函数
+        // 5.2 添加解析飞行计划JSON的辅助函数
+        private FlightPlanInfo ParseFlightPlanJson(string json)
+        {
+            var flightPlanInfo = new FlightPlanInfo { RawJson = json };
+
+            try
+            {
+                // 检查是否是错误响应
+                if (json.Contains("\"error\""))
+                {
+                    var errorDoc = System.Text.Json.JsonDocument.Parse(json);
+                    flightPlanInfo.HasError = true;
+                    flightPlanInfo.ErrorMessage = errorDoc.RootElement.GetProperty("error").GetString();
+                    return flightPlanInfo;
+                }
+
+                var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                // 解析基本飞行计划信息
+                if (root.TryGetProperty("departureAirport", out var departureElement))
+                {
+                    // 解析出发机场ICAO
+                    if (departureElement.TryGetProperty("icao", out var icaoElement))
+                    {
+                        // 尝试获取机场代码，优先使用airport字段
+                        if (icaoElement.TryGetProperty("airport", out var airportElement) && airportElement.GetString().Length>0)
+                        {
+                            flightPlanInfo.Departure = airportElement.GetString();
+                        }
+                        else if (icaoElement.TryGetProperty("ident", out var identElement))
+                        {
+                            flightPlanInfo.Departure = identElement.GetString();
+                        }
+                    }
+
+                    // 解析出发跑道
+                    if (departureElement.TryGetProperty("runway", out var runwayElement))
+                    {
+                        // 组合跑道编号和指示符
+                        string number = "";
+                        string designator = "";
+
+                        if (runwayElement.TryGetProperty("number", out var numberElement))
+                        {
+                            number = numberElement.GetString() ?? "";
+                        }
+
+                        if (runwayElement.TryGetProperty("designator", out var designatorElement))
+                        {
+                            designator = designatorElement.GetString() ?? "";
+                        }
+
+                        flightPlanInfo.Runway = $"{number}{designator}";
+                    }
+                }
+
+                if (root.TryGetProperty("destinationAirport", out var destinationElement))
+                {
+                    // 解析目的地机场ICAO
+                    if (destinationElement.TryGetProperty("icao", out var icaoElement))
+                    {
+                        if (icaoElement.TryGetProperty("airport", out var airportElement) && airportElement.GetString().Length > 0)
+                        {
+                            flightPlanInfo.Destination = airportElement.GetString();
+                        }
+                        else if (icaoElement.TryGetProperty("ident", out var identElement))
+                        {
+                            flightPlanInfo.Destination = identElement.GetString();
+                        }
+                    }
+                }
+
+                if (root.TryGetProperty("cruiseAltitude", out var cruiseElement))
+                {
+                    flightPlanInfo.CruiseAltitude = cruiseElement.TryGetProperty("altitude", out var altitudeElement)
+                        ? altitudeElement.GetInt32()
+                        : 0;
+                }
+
+                if (root.TryGetProperty("numEnrouteLegs", out var legsElement))
+                {
+                    flightPlanInfo.WaypointCount = legsElement.GetInt32();
+                }
+
+                // 解析航点
+                if (root.TryGetProperty("enrouteLegs", out var waypointsElement))
+                {
+                    flightPlanInfo.Waypoints = new List<string>();
+                    foreach (var waypoint in waypointsElement.EnumerateArray())
+                    {
+                        string waypointName = "未知";
+
+                        // 尝试获取fixIcao字段
+                        if (waypoint.TryGetProperty("fixIcao", out var fixIcao))
+                        {
+                            waypointName = fixIcao.GetString() ?? "未知";
+                        }
+                        // 如果fixIcao为空，尝试获取name字段
+                        else if (waypoint.TryGetProperty("name", out var nameElement))
+                        {
+                            waypointName = nameElement.GetString() ?? "未知";
+                        }
+
+                        flightPlanInfo.Waypoints.Add(waypointName);
+                    }
+                }
+
+                // 尝试获取进近信息（新增）
+                if (root.TryGetProperty("destinationAirport", out var destAirportElement))
+                {
+                    if (destAirportElement.TryGetProperty("approach", out var approachElement))
+                    {
+                        // 格式化进近信息
+                        string approachType = "";
+                        string runwayNumber = "";
+                        string runwayDesignator = "";
+                        string suffix = "";
+
+                        if (approachElement.TryGetProperty("type", out var typeElement))
+                        {
+                            approachType = typeElement.GetString() ?? "";
+                        }
+
+                        if (approachElement.TryGetProperty("runway_number", out var rwyNumberElement))
+                        {
+                            runwayNumber = rwyNumberElement.GetString() ?? "";
+                        }
+
+                        if (approachElement.TryGetProperty("runway_designator", out var rwyDesignatorElement))
+                        {
+                            runwayDesignator = rwyDesignatorElement.GetString() ?? "";
+                        }
+
+                        if (approachElement.TryGetProperty("suffix", out var suffixElement))
+                        {
+                            suffix = suffixElement.GetString() ?? "";
+                        }
+
+                        flightPlanInfo.Approach = $"{approachType}-{runwayNumber}{runwayDesignator}-{suffix}";
+                    }
+                }
+
+                flightPlanInfo.HasError = false;
+            }
+            catch (Exception ex)
+            {
+                flightPlanInfo.HasError = true;
+                flightPlanInfo.ErrorMessage = $"解析JSON失败: {ex.Message}";
+                _logger.LogError($"解析飞行计划JSON失败: {ex.Message}\nJSON内容: {json}");
+            }
+
+            return flightPlanInfo;
+        }
+
+        // 5.3 添加格式化显示飞行计划的辅助函数
+        // 5.3 添加格式化显示飞行计划的辅助函数
+        private string FormatFlightPlanForDisplay(FlightPlanInfo flightPlanInfo)
+        {
+            var sb = new System.Text.StringBuilder();
+
+            sb.AppendLine("=== 飞行计划信息 ===");
+            sb.AppendLine($"出发机场: {flightPlanInfo.Departure ?? "未知"}");
+            sb.AppendLine($"目的地机场: {flightPlanInfo.Destination ?? "未知"}");
+            sb.AppendLine($"跑道: {flightPlanInfo.Runway ?? "未知"}");
+
+            // 显示进近信息（如果有）
+            if (!string.IsNullOrEmpty(flightPlanInfo.Approach))
+            {
+                sb.AppendLine($"进近方式: {flightPlanInfo.Approach}");
+            }
+
+            sb.AppendLine($"巡航高度: {flightPlanInfo.CruiseAltitude} 英尺");
+            sb.AppendLine($"航点数量: {flightPlanInfo.WaypointCount}");
+            sb.AppendLine();
+
+            if (flightPlanInfo.Waypoints != null && flightPlanInfo.Waypoints.Count > 0)
+            {
+                sb.AppendLine("=== 航点列表 ===");
+                for (int i = 0; i < flightPlanInfo.Waypoints.Count; i++)
+                {
+                    sb.AppendLine($"{i + 1:00}. {flightPlanInfo.Waypoints[i]}");
+                }
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("=== 原始JSON ===");
+            sb.AppendLine("(点击'格式化JSON'按钮查看完整结构)");
+
+            return sb.ToString();
         }
     }
 }
