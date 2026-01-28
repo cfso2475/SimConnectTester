@@ -267,7 +267,7 @@ namespace SimConnectTester
         {
             //this.components = new System.ComponentModel.Container();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 950);
+            this.ClientSize = new System.Drawing.Size(1000, 850); // 加宽窗口
             this.Text = "Flight Simulator Controller";
             this.StartPosition = FormStartPosition.CenterScreen;
 
@@ -275,9 +275,9 @@ namespace SimConnectTester
             InitializeSimEventSection();
             InitializeInputEventSection();
             InitializeLVARSection();
+            InitializeFlightPlanSection();  // 飞行计划放在右侧
             InitializeStatusLabel();
             InitializeConnectionButtons();
-            InitializeFlightPlanSection();  // 添加这一行
 
             // 设置Tab顺序
             SetTabOrder();
@@ -289,7 +289,7 @@ namespace SimConnectTester
             simVarGroupBox = new GroupBox();
             simVarGroupBox.Text = "SimVar";
             simVarGroupBox.Location = new Point(20, 20);
-            simVarGroupBox.Size = new Size(560, 180);
+            simVarGroupBox.Size = new Size(460, 180);
             this.Controls.Add(simVarGroupBox);
 
             // SimVar Name
@@ -347,7 +347,7 @@ namespace SimConnectTester
             simVarResultLabel = new Label();
             simVarResultLabel.Text = "结果将显示在这里...";
             simVarResultLabel.Location = new Point(20, 130);
-            simVarResultLabel.Size = new Size(520, 40);
+            simVarResultLabel.Size = new Size(420, 40);
             simVarResultLabel.BorderStyle = BorderStyle.FixedSingle;
             simVarResultLabel.BackColor = Color.LightGray;
             simVarGroupBox.Controls.Add(simVarResultLabel);
@@ -358,7 +358,7 @@ namespace SimConnectTester
             simEventGroupBox = new GroupBox();
             simEventGroupBox.Text = "SimEvent";
             simEventGroupBox.Location = new Point(20, 220);
-            simEventGroupBox.Size = new Size(560, 180);
+            simEventGroupBox.Size = new Size(460, 180);
             this.Controls.Add(simEventGroupBox);
 
             // SimEvent Name
@@ -409,7 +409,7 @@ namespace SimConnectTester
             simEventResultLabel = new Label();
             simEventResultLabel.Text = "结果将显示在这里...";
             simEventResultLabel.Location = new Point(20, 130);
-            simEventResultLabel.Size = new Size(520, 40);
+            simEventResultLabel.Size = new Size(420, 40);
             simEventResultLabel.BorderStyle = BorderStyle.FixedSingle;
             simEventResultLabel.BackColor = Color.LightGray;
             simEventGroupBox.Controls.Add(simEventResultLabel);
@@ -420,7 +420,7 @@ namespace SimConnectTester
             inputEventGroupBox = new GroupBox();
             inputEventGroupBox.Text = "InputEvent";
             inputEventGroupBox.Location = new Point(20, 420);
-            inputEventGroupBox.Size = new Size(560, 180);
+            inputEventGroupBox.Size = new Size(460, 180);
             this.Controls.Add(inputEventGroupBox);
 
             // InputEvent 下拉列表
@@ -470,7 +470,7 @@ namespace SimConnectTester
             inputEventResultLabel = new Label();
             inputEventResultLabel.Text = "结果将显示在这里...";
             inputEventResultLabel.Location = new Point(20, 110);
-            inputEventResultLabel.Size = new Size(520, 40);
+            inputEventResultLabel.Size = new Size(420, 40);
             inputEventResultLabel.BorderStyle = BorderStyle.FixedSingle;
             inputEventResultLabel.BackColor = Color.LightGray;
             inputEventGroupBox.Controls.Add(inputEventResultLabel);
@@ -479,8 +479,8 @@ namespace SimConnectTester
         {
             lvarGroupBox = new GroupBox();
             lvarGroupBox.Text = "LVAR";
-            lvarGroupBox.Location = new Point(20, 620);
-            lvarGroupBox.Size = new Size(560, 150);
+            lvarGroupBox.Location = new Point(500, 20); // 放在右侧
+            lvarGroupBox.Size = new Size(460, 200); // 调整高度
             this.Controls.Add(lvarGroupBox);
 
             // LVAR 下拉列表
@@ -493,7 +493,7 @@ namespace SimConnectTester
             ComboBox lvarComboBox = new ComboBox();
             lvarComboBox.Name = "lvarComboBox";
             lvarComboBox.Location = new Point(100, 27);
-            lvarComboBox.Size = new Size(300, 21);
+            lvarComboBox.Size = new Size(250, 21); // 调整宽度
             lvarComboBox.DropDownStyle = ComboBoxStyle.DropDown;
             lvarComboBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
             lvarComboBox.AutoCompleteSource = AutoCompleteSource.ListItems;
@@ -508,22 +508,22 @@ namespace SimConnectTester
 
             lvarNameTextBox = new TextBox();
             lvarNameTextBox.Location = new Point(100, 57);
-            lvarNameTextBox.Size = new Size(300, 20);
+            lvarNameTextBox.Size = new Size(250, 20); // 调整宽度
             lvarGroupBox.Controls.Add(lvarNameTextBox);
 
             // 获取按钮
             lvarGetButton = new Button();
             lvarGetButton.Text = "获取LVAR值";
-            lvarGetButton.Location = new Point(420, 57);
-            lvarGetButton.Size = new Size(100, 30);
+            lvarGetButton.Location = new Point(360, 57); // 调整位置
+            lvarGetButton.Size = new Size(80, 30);
             lvarGetButton.Click += lvarGetButton_Click;
             lvarGroupBox.Controls.Add(lvarGetButton);
 
             // 刷新列表按钮
             refreshLvarListButton = new Button();
             refreshLvarListButton.Text = "刷新列表";
-            refreshLvarListButton.Location = new Point(420, 27);
-            refreshLvarListButton.Size = new Size(100, 30);
+            refreshLvarListButton.Location = new Point(360, 27); // 调整位置
+            refreshLvarListButton.Size = new Size(80, 30);
             refreshLvarListButton.Click += RefreshLvarListButton_Click;
             lvarGroupBox.Controls.Add(refreshLvarListButton);
 
@@ -531,7 +531,7 @@ namespace SimConnectTester
             lvarResultLabel = new Label();
             lvarResultLabel.Text = "LVAR值将显示在这里...";
             lvarResultLabel.Location = new Point(20, 100);
-            lvarResultLabel.Size = new Size(520, 60);
+            lvarResultLabel.Size = new Size(420, 90); // 增加高度
             lvarResultLabel.BorderStyle = BorderStyle.FixedSingle;
             lvarResultLabel.BackColor = Color.LightGray;
             lvarGroupBox.Controls.Add(lvarResultLabel);
@@ -540,24 +540,25 @@ namespace SimConnectTester
         {
             statusLabel = new Label();
             statusLabel.Text = "状态: 未连接";
-            statusLabel.Location = new Point(20, 820);
-            statusLabel.Size = new Size(560, 20);
+            statusLabel.Location = new Point(20, 720); // 调整位置
+            statusLabel.Size = new Size(940, 20); // 调整宽度
             statusLabel.BorderStyle = BorderStyle.FixedSingle;
             statusLabel.BackColor = SystemColors.Info;
             this.Controls.Add(statusLabel);
         }
+
         private void InitializeConnectionButtons()
         {
             connectButton = new Button();
             connectButton.Text = "连接";
-            connectButton.Location = new Point(20, 780);
+            connectButton.Location = new Point(20, 680); // 调整位置
             connectButton.Size = new Size(100, 30);
             connectButton.Click += ConnectButton_Click;
             this.Controls.Add(connectButton);
 
             disconnectButton = new Button();
             disconnectButton.Text = "断开";
-            disconnectButton.Location = new Point(140, 780);
+            disconnectButton.Location = new Point(140, 680); // 调整位置
             disconnectButton.Size = new Size(100, 30);
             disconnectButton.Click += DisconnectButton_Click;
             disconnectButton.Enabled = false;
@@ -590,13 +591,10 @@ namespace SimConnectTester
             // 飞行计划GroupBox
             GroupBox flightPlanGroupBox = new GroupBox();
             flightPlanGroupBox.Text = "飞行计划";
-            flightPlanGroupBox.Location = new Point(20, 790);  // 调整位置
-            flightPlanGroupBox.Size = new Size(560, 200);
+            flightPlanGroupBox.Location = new Point(500, 240);  // 放在右侧LVAR下方
+            flightPlanGroupBox.Size = new Size(460, 380);  // 增加高度
             flightPlanGroupBox.Name = "flightPlanGroupBox";
             this.Controls.Add(flightPlanGroupBox);
-
-            // 更新窗体高度
-            this.ClientSize = new System.Drawing.Size(600, 1000);  // 增加高度
 
             // 获取飞行计划按钮
             Button getFlightPlanButton = new Button();
@@ -627,7 +625,7 @@ namespace SimConnectTester
             Label flightPlanStatusLabel = new Label();
             flightPlanStatusLabel.Text = "状态: 等待请求";
             flightPlanStatusLabel.Location = new Point(350, 35);
-            flightPlanStatusLabel.Size = new Size(200, 20);
+            flightPlanStatusLabel.Size = new Size(100, 20);
             flightPlanStatusLabel.Name = "flightPlanStatusLabel";
             flightPlanGroupBox.Controls.Add(flightPlanStatusLabel);
 
@@ -636,26 +634,10 @@ namespace SimConnectTester
             flightPlanTextBox.Multiline = true;
             flightPlanTextBox.ScrollBars = ScrollBars.Both;
             flightPlanTextBox.Location = new Point(20, 70);
-            flightPlanTextBox.Size = new Size(520, 120);
+            flightPlanTextBox.Size = new Size(420, 290);  // 增加高度
             flightPlanTextBox.Font = new Font("Consolas", 9);  // 使用等宽字体显示JSON
             flightPlanTextBox.Name = "flightPlanTextBox";
             flightPlanGroupBox.Controls.Add(flightPlanTextBox);
-
-            // 调整其他控件的位置
-            if (statusLabel != null)
-            {
-                statusLabel.Location = new Point(20, 1000);  // 向下移动
-            }
-
-            if (connectButton != null)
-            {
-                connectButton.Location = new Point(20, 960);
-            }
-
-            if (disconnectButton != null)
-            {
-                disconnectButton.Location = new Point(140, 960);
-            }
         }
 
         // 添加连接按钮点击事件处理
