@@ -71,6 +71,8 @@ namespace SimConnectTester
 
         struct LVARResponseData
         {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+            public string lvarName;      // 新增：请求的 LVAR 名称
             public double lvarValue;
         }
 
@@ -126,11 +128,11 @@ namespace SimConnectTester
 
         enum FIXED_SIM_EVENTS
         {
-            Event1,
-            Event2,
-            Event3,
-            Event4,
-            Event5,
+            TOGGLE_MASTER_BATTERY,
+            AXIS_PC_MOVE_Z,
+            PC_CROUCH_TOGGLE,
+            ZOOM_IN,
+            PAN_DOWN,
             Event6,
             Event7,
             Event8,
@@ -735,8 +737,8 @@ namespace SimConnectTester
                 // 定义响应数据结构
                 _logger.LogDebug("start LVAR_RESPONSE");
                 simConnect.MapClientDataNameToID("CVCWASMDATA_RESPONSE", ClientDataID.LVAR_RESPONSE);
-                simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 8, 0, 0);
+                simConnect.CreateClientData(ClientDataID.LVAR_RESPONSE, 264, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_RESPONSE_DEFINITION, 0, 264, 0, 0);
                 simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_RESPONSE_DEFINITION);
                 //await Task.Delay(10000);
 
@@ -750,8 +752,8 @@ namespace SimConnectTester
 
                 _logger.LogDebug("start LVAR_LISTCOUNT_RESPONSE_ID");
                 simConnect.MapClientDataNameToID("CVCWASMDATA_LISTCOUNT_RESPONSE", ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID);
-                simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 8, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
-                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 8, 0, 0);
+                simConnect.CreateClientData(ClientDataID.LVAR_LISTCOUNT_RESPONSE_ID, 264, SIMCONNECT_CREATE_CLIENT_DATA_FLAG.DEFAULT);
+                simConnect.AddToClientDataDefinition(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION, 0, 264, 0, 0);
                 simConnect.RegisterStruct<SIMCONNECT_RECV_CLIENT_DATA, LVARResponseData>(DEFINITIONS.LVAR_LISTCOUNT_RESPONSE_DEFINITION);
 
 
@@ -1307,6 +1309,46 @@ namespace SimConnectTester
 
             try
             {
+                Enum fixEvent=null;
+                switch (name)
+                {
+                    case "PC_CROUCH_TOGGLE":
+                        fixEvent = FIXED_SIM_EVENTS.PC_CROUCH_TOGGLE;
+                        break;
+                    case "AXIS_PC_MOVE_Z":
+                        fixEvent = FIXED_SIM_EVENTS.AXIS_PC_MOVE_Z;
+                        break;
+                    case "TOGGLE_MASTER_BATTERY":
+                        fixEvent = FIXED_SIM_EVENTS.TOGGLE_MASTER_BATTERY;
+                        break;
+                    case "PAN_DOWN":
+                        fixEvent = FIXED_SIM_EVENTS.PAN_DOWN;
+                        break;
+                    case "ZOOM_IN":
+                        fixEvent = FIXED_SIM_EVENTS.ZOOM_IN;
+                        break;
+                }
+                if (fixEvent!=null) { 
+                    simConnect.MapClientEventToSimEvent(fixEvent, name);
+                    simConnect.AddClientEventToNotificationGroup(GROUP_ID.GROUP_1, fixEvent, false);
+
+                    // 触发事件
+                    if (!string.IsNullOrEmpty(value) && double.TryParse(value, out double fixeventValue))
+                    {
+                        simConnect.TransmitClientEvent(SimConnect.SIMCONNECT_OBJECT_ID_USER_AIRCRAFT, fixEvent, (uint)fixeventValue, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+                    }
+                    else
+                    {
+                        simConnect.TransmitClientEvent(SimConnect.SIMCONNECT_OBJECT_ID_USER_AIRCRAFT, fixEvent, 0, SIMCONNECT_GROUP_PRIORITY.HIGHEST, SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+                    }
+                    simEventResultLabel.Text = $"事件触发成功: {name}";
+                }
+                else
+                {
+                    simEventResultLabel.Text = $"不支持的事件: {name}";
+                }
+                return;
+
                 FIXED_SIM_EVENTS currentEvent;
 
                 // 检查是否已经处理过该事件名
